@@ -1,0 +1,19 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+bindir=@bindir@
+includedir=@includedir@/aroop_core@PACKAGE_SUFFIX@
+datarootdir=@datarootdir@
+datadir=@datadir@
+vapidir=@datadir@/aroop@PACKAGE_SUFFIX@/vapi
+variant=static
+aroopc=${bindir}/aroopc@PACKAGE_SUFFIX@
+
+@vapigen_decl@
+
+Name: Aroop core
+Description: The Aroop core library
+Version: @VERSION@
+Libs: -L${libdir} -laroop_core
+Libs.private: ${libdir}/libaroop_core_${variant}.a
+Cflags: -I${includedir}
