@@ -6,15 +6,18 @@ This is complimentary C library for the aroop generated code.
 Building
 ========
 
-Building core library binary is trivial. You need to put `make` command and that is all.
+Aroop Core needs automake, libtool and optionally pkg-config installed.
+
+Building core library binary is trivial. It is like `./autogen.sh;make;make install;`
 
 ```
-a/aroop$ cd aroop/core
-a/aroop/aroop/core$ make
+a/aroop_core$ ./autogen.sh
+a/aroop_core$ make
 ...
 ...
-a/aroop/aroop/core$ ls
+a/aroop_core$ ls
 libaroop_core_static.a libaroop_core_debug.a libaroop_core_basic.o  libaroop_core.o 
+a/aroop_core$ make install
 ```
 
 After build we shall get the object files(*libaroop_core_basic.o*,*libaroop_core.o*) and also an archive(*libaroop_core.a*). You may link them to your binary using `-laroop\_core` flag. Otherwise you can also link the object file(*libaroop_core.o*) with the binary.
@@ -34,3 +37,5 @@ Reading
 TASKS
 =====
 [ ] Add a simple queue for single thread applications.
+[ ] Fix the opp_list delete.
+[ ] Build an optimized memory profiled version.
