@@ -346,6 +346,17 @@ aroop_txt_t*aroop_txt_set_len(aroop_txt_t*text, int len);
 	} \
 	aroop_internal_ret; \
 }
+
+#define aroop_txt_concat_string_len(x,y,z) { \
+	int aroop_internal_len = z; \
+	int aroop_internal_ret = !((x)->internal_flag & XTRING_IS_IMMUTABLE) && (y) && ((x)->len+aroop_internal_len <= (x)->size); \
+	if(aroop_internal_ret) { \
+		memmove(aroop_txt_to_string(x)+(x)->len, (y), aroop_internal_len); \
+		(x)->hash = 0; \
+		(x)->len += aroop_internal_len; \
+	} \
+	aroop_internal_ret; \
+}
 #define aroop_txt_concat_char(x,y) { \
 	int aroop_internal_ret = !((x)->internal_flag & XTRING_IS_IMMUTABLE) && (((x)->len+1) < (x)->size); \
 	if(aroop_internal_ret) { \

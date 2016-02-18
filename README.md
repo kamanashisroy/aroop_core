@@ -36,6 +36,8 @@ Reading
 
 TASKS
 =====
-[ ] Add a simple queue for single thread applications.
-[ ] Fix the opp_list delete.
-[ ] Build an optimized memory profiled version.
+
+- [ ] Add a simple queue for single thread applications.
+- [ ] Fix the opp_list delete.
+- [ ] Build an optimized memory profiled version.
+
