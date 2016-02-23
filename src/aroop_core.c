@@ -69,7 +69,9 @@ int aroop_init(int argc, char ** argv) {
 		opp_any_obj_system_init();
 		aroop_txt_system_init();
 		opp_str2system_init();
+#ifndef AROOP_BASIC
 		opp_queuesystem_init();
+#endif
 		opp_watchdog_init();
 	}
 	return 0;
@@ -80,10 +82,10 @@ int aroop_main0(int argc, char ** argv, int (*cb)()) {
 	return cb();
 }
 
-int aroop_main1(int argc, char ** argv, int (*cb)(char*args)) {
+int aroop_main1(int argc, char ** argv, int (*cb)(char**args)) {
 	int i = 0;
 	aroop_init(argc,argv);
-	char*args = alloca(argc+1);
+	char**args = alloca(sizeof(char**)*(argc+1));
 	for(i=0;i<argc;i++) {
 		args[i] = argv[i];
 	}
@@ -123,7 +125,9 @@ int aroop_deinit() {
 		opp_any_obj_system_deinit();
 		aroop_txt_system_deinit();
 		opp_str2system_deinit();
+#ifndef AROOP_BASIC
 		opp_queuesystem_deinit();
+#endif
 #ifdef PROFILER_CRASH_DEBUG
 		aroop_write_output_stream_t log = {NULL, profiler_logger_debug};
 		aroop_memory_profiler_dump(log, NULL, 1);

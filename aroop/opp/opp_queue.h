@@ -29,6 +29,7 @@
 
 C_CAPSULE_START
 
+#ifndef OPP_BASIC
 enum {
 	OBJ_QUEUE_RETRUN_UNLINK = -99,
 	OBJ_QUEUE_STACK_ALLOC = 255,
@@ -124,6 +125,7 @@ int opp_queue_test_deinit();
 #endif
 
 
+#endif // OPP_BASIC
 C_CAPSULE_END
 
 #endif /* OPP_QUEUE_H */

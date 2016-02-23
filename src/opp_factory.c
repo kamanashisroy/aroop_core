@@ -127,7 +127,7 @@ enum {
 		SYNC_ASSERT(!sync_mutex_unlock(&(x)->lock)); \
 	} \
 }while(0)
-#else
+#else // OPP_BUFFER_HAS_LOCK
 #define OPP_LOCK(x)
 #define OPP_UNLOCK(x)
 #define BINARY_AND_HELPER(xtype,x,y) ({*x &= y;})

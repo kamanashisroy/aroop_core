@@ -29,6 +29,7 @@
 
 C_CAPSULE_START
 
+#ifndef OPP_BASIC
 enum {
 	OPP_QUEUE_INITIALIZED = 14,
 #ifdef AROOP_LOW_MEMORY
@@ -622,6 +623,7 @@ int opp_queue_test_deinit() {
 	return 0;
 }
 #endif // TEST_OBJ_FACTORY_UTILS
+#endif // OPP_BASIC
 
 C_CAPSULE_END
 
