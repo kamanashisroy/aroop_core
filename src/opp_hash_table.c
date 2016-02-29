@@ -92,7 +92,7 @@ void*opp_hash_table_get_no_ref(opp_hash_table_t*ht, void*key) {
 }
 
 void*opp_hash_table_get(opp_hash_table_t*ht, void*key) {
-	void*data = opp_hash_table_get(ht, key);
+	void*data = opp_hash_table_get_no_ref(ht, key);
 	if(data)OPPREF(data);
 	return data;
 }
