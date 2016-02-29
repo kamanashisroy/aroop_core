@@ -112,6 +112,17 @@ int opp_hash_table_set(opp_hash_table_t*ht, void*key, void*obj_data) {
 	return 0;
 }
 
+int opp_hash_table_traverse(opp_hash_table_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash) {
+	struct opp_iterator iterator = {};
+	opp_iterator_create(&iterator, &ht->fac, flags, 0, 0);
+	opp_map_pointer_ext_t*pt;
+	while(pt = opp_iterator_next(&iterator)) {
+		cb(cb_data, pt->key, pt->ptr.obj_data);
+	}
+	opp_iterator_destroy(&iterator);
+	return 0;
+}
+
 int opp_hash_table_create_and_profile(opp_hash_table_t*ht, int pool_size, unsigned int flag, opp_hash_function_t hfunc, opp_equals_t efunc
 		, char*source_file, int source_line, char*module_name) {
 	ht->hfunc = hfunc;
