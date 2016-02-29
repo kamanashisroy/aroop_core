@@ -53,6 +53,7 @@ typedef struct {
 } opp_hash_table_t;
 
 void*opp_hash_table_get(opp_hash_table_t*ht, void*key);
+void*opp_hash_table_get_no_ref(opp_hash_table_t*ht, void*key);
 int opp_hash_table_set(opp_hash_table_t*ht, void*key, void*obj_data);
 int opp_hash_table_traverse(opp_hash_table_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash);
 #define opp_hash_table_create(x,y,z,a,b) ({opp_hash_table_create_and_profile(x,y,z,a,b, __FILE__, __LINE__, AROOP_MODULE_NAME);})

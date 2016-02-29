@@ -78,7 +78,7 @@ static int match_hash_and_delete(const void*func_data, const void*data) {
 }
 
 #define OPP_KEY_HASH(h,x) ({h->hfunc.aroop_cb(h->hfunc.aroop_closure_data,x);})
-void*opp_hash_table_get(opp_hash_table_t*ht, void*key) {
+void*opp_hash_table_get_no_ref(opp_hash_table_t*ht, void*key) {
 	//unsigned long hash = aroop_txt_get_hash(key);
 	unsigned long hash = OPP_KEY_HASH(ht,key);
 	struct match_data mdata = {ht,key};
@@ -89,6 +89,12 @@ void*opp_hash_table_get(opp_hash_table_t*ht, void*key) {
 	void*ret = item->ptr.obj_data; // Note: we did not ref it.
 	OPPUNREF(item);
 	return ret;
+}
+
+void*opp_hash_table_get(opp_hash_table_t*ht, void*key) {
+	void*data = opp_hash_table_get(ht, key);
+	if(data)OPPREF(data);
+	return data;
 }
 
 int opp_hash_table_set(opp_hash_table_t*ht, void*key, void*obj_data) {
