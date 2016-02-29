@@ -141,7 +141,7 @@ enum {
 
 // hashtable
 #define aroop_hash_table_create(x0, xx1, xx2, a, b, x2, x3) ({opp_hash_table_create(x0, x2, x3, a, b);})
-#define aroop_hash_table_get(x,y,z) ({*z = opp_hash_table_get(x, y);})
+#define aroop_hash_table_get_no_ref(x,y,z) ({*z = opp_hash_table_get_no_ref(x, y);})
 #define aroop_hash_table_use_count(x) (OPP_FACTORY_USE_COUNT(&(x)->fac));
 #define aroop_hash_table_pointer_get_key(x,y) ({*(y) = (x)->key;})
 #define aroop_hashable_destruction(x)
