@@ -658,6 +658,7 @@ void*opp_get(struct opp_factory*obuff, int token) {
 	struct opp_pool*pool;
 
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	do {
 		/* sanity check */
@@ -687,7 +688,7 @@ void*opp_get(struct opp_factory*obuff, int token) {
 			break;
 		}
 	} while(0);
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 	return data;
@@ -1130,11 +1131,12 @@ void*opp_search(struct opp_factory*obuff
 	void*ret = NULL;
 	SYNC_ASSERT(obuff->property & OPPF_SEARCHABLE);
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if((ret = opp_lookup_table_search(&obuff->tree, hash, compare_func, compare_data))) {
 		OPPREF(ret);
 	}
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	OPP_UNLOCK(obuff);
 	if(rval != NULL) {
 		*rval = ret;
@@ -1156,6 +1158,7 @@ void*opp_find_list_full_donot_use(struct opp_factory*obuff, obj_comp_t compare_f
 #endif
 	struct opp_pool*pool;
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if(!obuff->use_count) {
 		goto exit_point;
@@ -1218,7 +1221,7 @@ void*opp_find_list_full_donot_use(struct opp_factory*obuff, obj_comp_t compare_f
 		}
 	}
 	exit_point:
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 	return retval;
@@ -1239,6 +1242,7 @@ void*opp_find_full(struct opp_factory*obuff, obj_comp_t compare_func, const void
 #endif
 	struct opp_pool*pool;
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if(!obuff->use_count) {
 		goto exit_point;
@@ -1327,7 +1331,7 @@ void*opp_find_full(struct opp_factory*obuff, obj_comp_t compare_func, const void
 		}
 	}
 	exit_point:
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 	return retval;
@@ -1442,6 +1446,7 @@ void opp_factory_list_do_full(struct opp_factory*obuff, obj_do_t obj_do, void*fu
 #endif
 	struct opp_pool*pool;
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if(!obuff->use_count) {
 		goto exitpoint;
@@ -1537,7 +1542,7 @@ void opp_factory_list_do_full(struct opp_factory*obuff, obj_do_t obj_do, void*fu
 		}
 	}
 exitpoint:
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 }
@@ -1560,6 +1565,7 @@ void*opp_iterator_next(struct opp_iterator*iterator) {
 		return NULL;
 	}
 	OPP_LOCK(iterator->fac);
+	const int gcflag = iterator->fac->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
 	iterator->fac->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if(iterator->data)OPPUNREF_UNLOCKED(iterator->data);
 	for(pool = iterator->fac->pools;pool;pool = pool->next) {
@@ -1648,7 +1654,7 @@ void*opp_iterator_next(struct opp_iterator*iterator) {
 		}
 	}
 exit_point:
-	iterator->fac->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	iterator->fac->internal_flags &= ~gcflag;
 	OPP_UNLOCK(iterator->fac);
 	return iterator->data;
 }
@@ -1701,6 +1707,8 @@ exitpoint:
 #endif
 	struct opp_pool*pool;
 	OPP_LOCK(obuff);
+	const int gcflag = obuff->internal_flags & OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags |= OPP_INTERNAL_FLAG_NO_GC_NOW;
 	if(!obuff->use_count) {
 		goto exitpoint;
 	}
@@ -1781,7 +1789,7 @@ exitpoint:
 		}
 	}
 exitpoint:
-	obuff->internal_flags &= ~OPP_INTERNAL_FLAG_NO_GC_NOW;
+	obuff->internal_flags &= ~gcflag;
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 #endif
