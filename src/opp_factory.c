@@ -352,7 +352,7 @@ int opp_factory_create_full(struct opp_factory*obuff
 #define SYNC_OBJ_CTZ(x) __builtin_ctz(x)
 #endif
 
-struct opp_pool*opp_factory_create_pool_donot_use(struct opp_factory*obuff, struct opp_pool*addpoint, void*nofreememory) {
+OPP_INLINE struct opp_pool*opp_factory_create_pool_donot_use(struct opp_factory*obuff, struct opp_pool*addpoint, void*nofreememory) {
 	// allocate a block of memory
 	struct opp_pool*pool = (struct opp_pool*)nofreememory;
 	opp_factory_profiler_checkleak();
@@ -394,9 +394,182 @@ struct opp_pool*opp_factory_create_pool_donot_use(struct opp_factory*obuff, stru
 	return pool;
 }
 
+#ifdef OPP_HAS_RECYCLING
+OPP_INLINE static SYNC_UWORD8_T*opp_alloc4_recycle(const SYNC_UWORD8_T slot_count, struct opp_pool*pool) {
+	if(slot_count == 1) {
+		/* traverse the pool link-list */
+		for(;pool; pool = pool->next) {
+			CHECK_POOL(pool);
+			if(pool->recycled) {
+				SYNC_ASSERT(!pool->recycled->refcount);
+				const SYNC_UWORD8_T*ret = (SYNC_UWORD8_T*)pool->recycled;
+				pool->recycled = pool->recycled->recycled;
+				return ret;
+			}
+		}
+	}
+	return NULL;
+}
+#endif
+
+OPP_INLINE static SYNC_UWORD8_T opp_alloc4_count_slots(SYNC_UWORD16_T size, const SYNC_UWORD16_T obj_size, const SYNC_UWORD16_T pool_size) {
+	SYNC_UWORD8_T slot_count = 1;
+	if(!size) /* the default size is one slot */
+		return 1;
+	size += sizeof(struct opp_object); /* we need to add object header */
+	OPP_NORMALIZE_SIZE(size); /* we need to convert the size into a chunk size */
+	/* TODO optimize the following line */
+	slot_count = size / obj_size + ((size % obj_size)?1:0); /* find the number of slot_count needed */
+
+	/* number of slot_count must be smaller than bit per string */
+	if(slot_count > BIT_PER_STRING) {
+		SYNC_LOG(SYNC_ERROR, "Alloc failed:solt %d cannot fit in %d-bit header for request size %d\n", slot_count, BIT_PER_STRING, size);
+		return 0;
+	}
+	/* number of slot_count must be smaller than object pool size */
+	if(slot_count > pool_size) {
+		SYNC_LOG(SYNC_ERROR, "Alloc failed:Cannot fit solts %d in pool of %d\n", slot_count, pool_size);
+		return 0;
+	}
+	/* apply some invariant testing */
+	SYNC_ASSERT(slot_count != 0);
+	SYNC_ASSERT(slot_count <= BIT_PER_STRING && slot_count <= pool_size);
+	return slot_count;
+}
+
+
+OPP_INLINE static void opp_alloc4_init_object_bit_index(struct opp_object*obj, const SYNC_UWORD8_T bit_idx, const BITSTRING_TYPE* bitstring, const SYNC_UWORD8_T slot_count) {
+	obj->bit_idx = bit_idx;
+	obj->bitstring = bitstring;
+	obj->slots = slot_count;
+}
+
+OPP_INLINE static SYNC_UWORD8_T*opp_alloc4_find_space(const struct opp_pool*pool, const SYNC_UWORD16_T pool_size, const SYNC_UWORD8_T slot_count, const SYNC_UWORD16_T obj_size, SYNC_UWORD16_T*obj_seq) {
+	int k = 0;
+	BITSTRING_TYPE*bitstring = pool->bitstring;
+	for(;BITSTRING_IDX_TO_BITS(k) < pool_size;k++,bitstring+=BITFIELD_SIZE) {
+		// find first 0
+		BITSTRING_TYPE bsv = (~(*bitstring | *(bitstring+BITFIELD_PAIRED)));
+		if(!bsv) continue;
+#ifdef OPP_DEBUG
+		int loop_breaker = 0;
+#endif
+		while(bsv) {
+#ifdef OPP_DEBUG
+			loop_breaker++;
+			SYNC_ASSERT(loop_breaker < BIT_PER_STRING);
+#endif
+			/**
+			 * check if there is enough slots available,
+			 * the number of 1(empty) in the string should be bigger than or equal to slot count
+			 */
+			if(slot_count > 1 && SYNC_OBJ_POPCOUNT(bsv) < slot_count) {
+				break;
+			}
+			/**
+			 * number of trailing 0(not empty) bits in bsv
+			 * if bsv = 0b11000, then bit_index = 3
+			 */
+			SYNC_UWORD8_T bit_idx = SYNC_OBJ_CTZ(bsv);
+			if(slot_count > 1 && (bit_idx + slot_count) > BIT_PER_STRING) {
+				// we cannot do it
+				break;
+			}
+			
+			/**
+			 * if we need 2 slots, and we want to position it in 3 then,
+			 * mask = 0b11000
+			 */
+			BITSTRING_TYPE mask = ((1 << slot_count)-1)<<bit_idx;
+			if((mask & bsv) != mask) { /* check if the slots are available */
+				bsv &= ~mask;
+				continue;
+			}
+			/**
+			 * We have found some space
+			 */
+			const SYNC_UWORD16_T obj_idx = *obj_seq = BITSTRING_IDX_TO_BITS(k) + bit_idx;
+			SYNC_ASSERT(obj_idx < pool_size);
+			const SYNC_UWORD8_T*ret = (pool->head + obj_idx*obj_size);
+			opp_alloc4_init_object_bit_index((const struct opp_object*)ret, bit_idx, bitstring, slot_count);
+			return ret;
+		}
+	}
+	return NULL;
+}
+
+OPP_INLINE static void opp_alloc4_init_object(const struct opp_factory*obuff, const struct opp_pool*pool, SYNC_UWORD8_T*given, const SYNC_UWORD8_T obj_idx) {
+	struct opp_object*obj = (struct opp_object*)given;
+	struct opp_object_ext*ext = (const struct opp_object_ext*)(obj+1);
+#ifdef OPP_HAS_TOKEN
+	if(obuff->property & OPPF_EXTENDED) {
+		ext->token = obuff->token_offset + pool->idx*obuff->pool_size + obj_idx;
+	}
+#endif
+	obj->obuff = obuff;
+#ifdef FACTORY_OBJ_SIGN
+	obj->signature = FACTORY_OBJ_SIGN;
+#endif
+	if(obuff->property & OPPF_EXTENDED) {
+		ext->flag = OPPN_ALL;
+		ext->hash = 0;
+	}
+	CHECK_POOL(pool);
+}
+
+OPP_INLINE static void opp_alloc4_object_setup(struct opp_object*obj, const SYNC_UWORD8_T doubleref) {
+	struct opp_factory*obuff = obj->obuff;
+	if(*(obj->bitstring+BITFIELD_FINALIZE) & ( 1 << obj->bit_idx)) {
+		OPP_FINALIZE_NOW(obuff,obj);
+	}
+	obj->refcount = doubleref?2:1;
+//		*(obj->bitstring) |= ( 1 << obj->bit_idx);
+	*(obj->bitstring+BITFIELD_FINALIZE) |= ( 1 << obj->bit_idx);
+#ifndef OPP_NO_FLAG_OPTIMIZATION
+	*(obj->bitstring+BITFIELD_PERFORMANCE) &= ~( 1 << obj->bit_idx);
+	*(obj->bitstring+BITFIELD_PERFORMANCE1) &= ~( 1 << obj->bit_idx);
+	*(obj->bitstring+BITFIELD_PERFORMANCE2) &= ~( 1 << obj->bit_idx);
+	*(obj->bitstring+BITFIELD_PERFORMANCE3) &= ~( 1 << obj->bit_idx);
+#endif
+	obuff->use_count++;
+#ifdef OPP_DEBUG_REFCOUNT
+	obj->rt_idx = 0;
+	int i;
+	for(i=0; i<OPP_TRACE_SIZE; i++) {
+		obj->ref_trace[i].filename = NULL;
+	}
+#endif
+
+	SET_PAIRED_BITS(obj);
+	*(obj->bitstring) |= ( 1 << obj->bit_idx); // mark as used
+}
+
+OPP_INLINE SYNC_UWORD8_T*opp_alloc4_build(const struct opp_factory*obuff, SYNC_UWORD8_T*given, SYNC_UWORD8_T doubleref, SYNC_UWORD8_T*require_clean, SYNC_UWORD8_T*require_init, void*init_data, va_list*ap) {
+	if(*require_clean) {
+		opp_force_memclean(given);
+		*require_clean = 0;
+	}
+	if((*require_init) && obuff->callback(given, OPPN_ACTION_INITIALIZE
+				, init_data
+				, *ap, (((struct opp_object*)given)-1)->slots*obuff->obj_size - sizeof(struct opp_object))) {
+		void*dup = given;
+		OPPUNREF(given);
+		if(doubleref) {
+			OPPUNREF(dup);
+		}
+		*require_init = 0;
+	}
+	return given;
+}
+
+
+/**
+ * @brief allocates memory in object pool
+ */
 void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T doubleref, SYNC_UWORD8_T require_clean, void*init_data, ...) {
 	SYNC_UWORD8_T*ret = NULL;
-	SYNC_UWORD8_T slots = 1;
+	SYNC_UWORD8_T slot_count = 1;
+	SYNC_UWORD8_T require_init = 1;
 	if(!require_clean)
 		require_clean = obuff->property & OPPF_MEMORY_CLEAN;
 	
@@ -404,101 +577,29 @@ void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T dou
 
 	OPP_LOCK(obuff);
 	do {
-		if(size) {
-			OPP_NORMALIZE_SIZE(size);
-			size += sizeof(struct opp_object);
-			slots = size / obuff->obj_size + ((size % obuff->obj_size)?1:0);
-			if(slots > BIT_PER_STRING || slots > obuff->pool_size) {
-				SYNC_LOG(SYNC_ERROR, "Too big allocation request %d\n", size);
-				break;
-			}
+		/* get the number of slots we need */
+		if(!(slot_count = opp_alloc4_count_slots(size, obuff->obj_size, obuff->pool_size))) {
+			break;
 		}
 #ifdef OPP_HAS_RECYCLING
-		if(slots == 1) {
-			struct opp_pool*pool;
-			for(pool = obuff->pools;pool; pool = pool->next) {
-				CHECK_POOL(pool);
-				if(pool->recycled) {
-					SYNC_ASSERT(!pool->recycled->refcount);
-					ret = (SYNC_UWORD8_T*)pool->recycled;
-					pool->recycled = pool->recycled->recycled;
-					break;
-				}
-			}
-		}
-		if(ret) {
+		if((ret = opp_alloc4_recycle(slot_count, obuff->pools))) {
 			break;
 		}
 #endif
+		/* find the space in some empty pool */
 		struct opp_pool*pool = NULL,*addpoint = NULL;
 		for(addpoint = NULL, pool = obuff->pools;pool;pool = pool->next) {
-			int k = 0;
 			if(!addpoint && (!pool->next || (pool->idx+1 != pool->next->idx))) {
 				addpoint = pool;
 			}
 			CHECK_POOL(pool);
-			BITSTRING_TYPE*bitstring = pool->bitstring;
-			for(;BITSTRING_IDX_TO_BITS(k) < obuff->pool_size;k++,bitstring+=BITFIELD_SIZE) {
-				// find first 0
-				BITSTRING_TYPE bsv = (~(*bitstring | *(bitstring+BITFIELD_PAIRED)));
-				if(!bsv) continue;
-#ifdef OPP_DEBUG
-				int loop_breaker = 0;
-#endif
-				while(bsv) {
-#ifdef OPP_DEBUG
-					loop_breaker++;
-					SYNC_ASSERT(loop_breaker < BIT_PER_STRING);
-#endif
-					if(slots > 1 && SYNC_OBJ_POPCOUNT(bsv) < slots) {
-						break;
-					}
-					SYNC_UWORD8_T bit_idx = SYNC_OBJ_CTZ(bsv);
-					if(slots > 1 && bit_idx + slots > BIT_PER_STRING) {
-						// we cannot do it
-						break;
-					}
-					
-#if 0
-					for(j=1;j<slots;j++) {
-						if(!(bsv & (1<<(bit_idx+j)))) {
-							j = 44;
-							break;
-						}
-					}
-					if(j == 44) {
-						bsv &= ~(1<<bit_idx);
-						continue;
-					}
-#else
-					BITSTRING_TYPE mask = ((1 << slots)-1)<<bit_idx;
-					if((mask & bsv) != mask) {
-						bsv &= ~mask;
-						continue;
-					}
-#endif
-					SYNC_UWORD16_T obj_idx = BITSTRING_IDX_TO_BITS(k) + bit_idx;
-					//aroop_printf("%d\n", bit_idx);
-					if(obj_idx < obuff->pool_size) {
-						ret = pool->head + obj_idx*obuff->obj_size;
-						struct opp_object*obj = (struct opp_object*)ret;
-						obj->bit_idx = bit_idx;
-						obj->bitstring = bitstring;
-#ifdef OPP_HAS_TOKEN
-						if(obuff->property & OPPF_EXTENDED) {
-							((struct opp_object_ext*)(obj+1))->token = obuff->token_offset + pool->idx*obuff->pool_size + obj_idx;
-						}
-#endif
-						obj->obuff = obuff;
-						CHECK_POOL(pool);
-					}
-					break;
-				}
-				if(ret) {
-					break;
-				}
+			/* find some space in the pool */
+			SYNC_UWORD16_T obj_idx = 0;
+			if((ret = opp_alloc4_find_space(pool, obuff->pool_size, slot_count, obuff->obj_size, &obj_idx))) {
+				/* initialize the object */
+				opp_alloc4_init_object(obuff, pool, ret, obj_idx);
+				break;
 			}
-			if(ret) break;
 		}
 
 		if(ret) {
@@ -508,95 +609,28 @@ void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T dou
 			break;
 		}
 
+		/* try to allocate new space */
 		pool = opp_factory_create_pool_donot_use(obuff, addpoint, NULL);
 		if(!pool) {
 			ret = NULL;
 			break;
 		}
 		ret = pool->head;
-		struct opp_object*obj = (struct opp_object*)ret;
-		obj->bit_idx = 0;
-		obj->bitstring = pool->bitstring;
-#ifdef OPP_HAS_TOKEN
-		if(obuff->property & OPPF_EXTENDED) {
-			((struct opp_object_ext*)(obj+1))->token = obuff->token_offset + pool->idx*obuff->pool_size;
-		}
-#endif
-		obj->obuff = obuff;
+		opp_alloc4_init_object_bit_index((const struct opp_object*)ret, 0, pool->bitstring, slot_count);
+		opp_alloc4_init_object(obuff, pool, ret, 0);
 	}while(0);
 
 	va_list ap;
 	va_start(ap, init_data);
 
-	do {
-		if(!ret)
-			break;
-
-		struct opp_object*obj = (struct opp_object*)ret;
+	if(ret) {
+		const struct opp_object*obj = (struct opp_object*)ret;
+		opp_alloc4_object_setup(obj, doubleref);
 		ret = (SYNC_UWORD8_T*)(obj+1);
-
-		if(*(obj->bitstring+BITFIELD_FINALIZE) & ( 1 << obj->bit_idx)) {
-			OPP_FINALIZE_NOW(obuff,obj);
-		}
-#ifdef FACTORY_OBJ_SIGN
-		obj->signature = FACTORY_OBJ_SIGN;
-#endif
-		if(obuff->property & OPPF_EXTENDED) {
-			((struct opp_object_ext*)(obj+1))->flag = OPPN_ALL;
-			((struct opp_object_ext*)(obj+1))->hash = 0;
-		}
-		obj->refcount = doubleref?2:1;
-		obj->slots = slots;
-
-//		*(obj->bitstring) |= ( 1 << obj->bit_idx);
-		*(obj->bitstring+BITFIELD_FINALIZE) |= ( 1 << obj->bit_idx);
-#ifndef OPP_NO_FLAG_OPTIMIZATION
-		*(obj->bitstring+BITFIELD_PERFORMANCE) &= ~( 1 << obj->bit_idx);
-		*(obj->bitstring+BITFIELD_PERFORMANCE1) &= ~( 1 << obj->bit_idx);
-		*(obj->bitstring+BITFIELD_PERFORMANCE2) &= ~( 1 << obj->bit_idx);
-		*(obj->bitstring+BITFIELD_PERFORMANCE3) &= ~( 1 << obj->bit_idx);
-#endif
-		obuff->use_count++;
-#ifdef OPP_DEBUG_REFCOUNT
-		obj->rt_idx = 0;
-		int i;
-		for(i=0; i<OPP_TRACE_SIZE; i++) {
-			obj->ref_trace[i].filename = NULL;
-		}
-#endif
-
-		SET_PAIRED_BITS(obj);
-#if 0
-		if(!(obuff->property & OPPF_FAST_INITIALIZE)&& obuff->callback && opp_callback2(ret, OPPN_ACTION_INITIALIZE, (void*)init_data, obj->slots*obuff->obj_size - sizeof(struct opp_object))) {
-			opp_set_flag(ret, OPPN_ZOMBIE);
-			ret = NULL;
-			obj->refcount = 0;
-			*(obj->bitstring+BITFIELD_FINALIZE) &= ~( 1 << obj->bit_idx);
-			UNSET_PAIRED_BITS(obj);
-			obuff->use_count--;
-			break;
-		}
-		*(obj->bitstring) |= ( 1 << obj->bit_idx);
-#else
-		*(obj->bitstring) |= ( 1 << obj->bit_idx);
-#endif
-	} while(0);
+	}
 
 	if(ret && !(obuff->property & OPPF_FAST_INITIALIZE) && obuff->callback) {
-		if(require_clean) {
-			opp_force_memclean(ret);
-			require_clean = 0;
-		}
-				
-		if(obuff->callback(ret, OPPN_ACTION_INITIALIZE
-					, (void*)init_data
-					, ap, ((struct opp_object*)ret-1)->slots*obuff->obj_size - sizeof(struct opp_object))) {
-			void*dup = ret;
-			OPPUNREF(ret);
-			if(doubleref) {
-				OPPUNREF(dup);
-			}
-		}
+		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, &ap);
 	}
 #ifdef OPP_DEBUG
 	if(obuff->pools && obuff->pools->bitstring) {
@@ -610,17 +644,7 @@ void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T dou
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 	if(ret) {
-		if(require_clean) {
-			opp_force_memclean(ret);
-			require_clean = 0;
-		}
-		if((obuff->property & OPPF_FAST_INITIALIZE) && obuff->callback && obuff->callback(ret, OPPN_ACTION_INITIALIZE, (void*)init_data, ap, ((struct opp_object*)ret-1)->slots*obuff->obj_size - sizeof(struct opp_object))) {
-			void*dup = ret;
-			OPPUNREF(ret);
-			if(doubleref) {
-				OPPUNREF(dup);
-			}
-		}
+		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, &ap);
 	}
 	va_end(ap);
 //	SYNC_ASSERT(ret);
@@ -1923,332 +1947,5 @@ void opp_factory_destroy_use_profiler_instead(struct opp_factory*obuff) {
 	}
 #endif
 }
-
-
-#ifdef TEST_OBJ_FACTORY_UTILS
-int opp_dump(const void*data, void (*log)(void *log_data, const char*fmt, ...), void*log_data) {
-#ifdef OPP_DEBUG_REFCOUNT
-	struct dump_log dump = {.log = log, .log_data = log_data};
-	return obj_debug_dump(data, &dump);
-#else
-	return 0;
-#endif
-}
-
-struct pencil {
-	struct opp_object_ext opp_internal_ext;
-	int color;
-	int depth;
-};
-
-struct pencil_logger {
-	void (*log)(void *log_data, const char*fmt, ...);
-	void*log_data;
-};
-
-static int pencil_verb(const void*data, const void*func_data) {
-	const struct pencil* pen = data;
-	const struct pencil_logger*logger = func_data;
-	logger->log(logger->log_data, "Pen (color:%d,depth:%d)\n",pen->color,pen->depth);
-	return 0;
-}
-
-static int pencil_compare(const void*compare_data, const void*data) {
-	const int *color = compare_data;
-	const struct pencil* pen = data;
-	if(pen->color == *color) return 1;
-	return 0;
-}
-
-static int pencil_compare_all(const void*compare_data, const void*data) {
-	return 1;
-}
-
-static int pencil_do(void*data, void*func_data) {
-	const struct pencil* pen = data;
-	const struct pencil_logger*logger = func_data;
-	logger->log(logger->log_data, "Pen (color:%d,depth:%d)\n", pen->color,pen->depth);
-	return 0;
-}
-
-static int obj_utils_test_helper(int inc, struct pencil_logger*logger) {
-	struct opp_factory bpencil;
-	struct pencil*pen;
-	struct pencil hijacked;
-	struct opp_factory list;
-	opp_pointer_ext_t*item = NULL;
-	int count = 0;
-	int color = 3;
-	int idx = 0;
-	int depth_list[17] = {1, 2, 2, 3, 4, 5, 0, 7, 8, 9, 3, 4, 5, 6, 7, 8, 9};
-	int ret = 0;
-
-	logger->log(logger->log_data, "Testing %d\n", inc);
-	opp_factory_create_full(&bpencil, inc, sizeof(struct pencil), 0, OPPF_EXTENDED, NULL);
-
-	// create 10 pencils
-	for(idx = 0; idx < 10; idx++) {
-		pen = OPP_ALLOC1(&bpencil);
-		pen->color = (idx%2)?3:1;
-		pen->depth = idx;
-		SYNC_ASSERT(pen->opp_internal_ext.flag == OPPN_ALL);
-	}
-	// remove 3
-	pen = opp_get(&bpencil, 0);
-	OPPUNREF(pen);
-	pen = opp_get(&bpencil, 1);
-	OPP_FACTORY_HIJACK(pen,&hijacked); // hijack one
-	pen = opp_get(&bpencil, 6);
-	OPPUNREF(pen);
-	if(inc%2) {
-		opp_factory_gc_donot_use(&bpencil);
-	}
-	// create more 10
-	for(idx = 0; idx < 10; idx++) {
-		pen = OPP_ALLOC1(&bpencil);
-		pen->color = (idx%2)?3:1;
-		pen->depth = idx;
-		SYNC_ASSERT(pen->opp_internal_ext.flag == OPPN_ALL);
-	}
-	opp_factory_verb(&bpencil, pencil_verb, logger, logger->log, logger->log_data);
-
-	if(!OPP_FIND(&bpencil, pencil_compare, &color)) {
-		SYNC_LOG(SYNC_ERROR, "TEST failed while finding color:3\n");
-		ret = -1;
-	}
-
-	OPP_LIST_CREATE_NOLOCK_EXT(&list, 10);
-	if((count = opp_list_find_from_factory(&bpencil, &list, pencil_compare_all, NULL))) {
-		if(count != 17) {
-			SYNC_LOG(SYNC_ERROR, "TEST failed while finding all\n");
-			ret = 1;
-		}
-		for(idx = 0; (item = opp_get(&list,idx)); idx++) {
-			pen = item->obj_data;
-			if(pen->depth != depth_list[idx]) {
-				SYNC_LOG(SYNC_ERROR, "TEST failed while matching depth\n");
-				ret = -1;
-			}
-			//ast_verb(1, "There is a pencil in the list (color:%d,depth:%d)\n", pen->color, pen->depth);
-		}
-	}
-	opp_factory_destroy(&list);
-	OPP_LIST_CREATE_NOLOCK_EXT(&list, 10);
-	if((count = opp_list_find_from_factory(&bpencil, &list, pencil_compare, &color))) {
-		if(count != 9) {
-			SYNC_LOG(SYNC_ERROR, "TEST failed while finding pencil color");
-			ret = 1;
-		}
-		for(idx = 0; (item = opp_get(&list,idx)); idx++) {
-			pen = item->obj_data;
-			if(pen->color != 3) {
-				SYNC_LOG(SYNC_ERROR, "TEST failed while checking pencil color\n");
-				ret = -1;
-			}
-			//ast_verb(1, "There is a pencil in the list (color:%d,depth:%d)\n", pen->color, pen->depth);
-		}
-	}
-
-	opp_factory_destroy(&list);
-	OPP_FACTORY_DO(&bpencil, pencil_do, logger);
-
-	opp_factory_gc_donot_use(&bpencil);
-	opp_factory_destroy(&bpencil);
-	logger->log(logger->log_data, "Test [OK]\n");
-
-	return ret;
-}
-
-static int obj_utils_test_search_tree(struct pencil_logger*logger) {
-	struct opp_factory bpencil;
-	struct pencil*pen,*first;
-	int ret = -1;
-	int i;
-	opp_factory_create_full(&bpencil, 5,sizeof(struct pencil), 0, OPPF_SEARCHABLE | OPPF_EXTENDED, NULL);
-
-	first = OPP_ALLOC1(&bpencil);
-	opp_set_hash(first, 0);
-	for(i=1;i<10;i++) {
-		pen = OPP_ALLOC1(&bpencil);
-		opp_set_hash(pen, i);
-	}
-	// try to delete the root
-	OPPUNREF(first);
-	if((pen = opp_search(&bpencil, 4, NULL, NULL)) && pen->opp_internal_ext.hash == 4) {
-		ret = 0;
-		logger->log(logger->log_data, "Search Test [OK]\n");
-	} else {
-		logger->log(logger->log_data, "Search Test [FAILED]\n");
-	}
-	opp_factory_destroy(&bpencil);
-	return ret;
-}
-
-static int obj_utils_test_helper2(struct pencil_logger*logger) {
-	struct opp_factory bstrings;
-	int i;
-	const int CUT_SIZE = 8;
-	const char*test_string = "Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space. Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space.";
-	char*string;
-	int ret = 0;
-	opp_factory_create_full(&bstrings, 32, 32, 0, OPPF_SWEEP_ON_UNREF, NULL);
-
-	string = opp_alloc4(&bstrings, strlen(test_string) + 1, 0, NULL);
-	strcpy(string, test_string);
-	logger->log(logger->log_data, "%s\n", string);
-
-	opp_shrink(string, CUT_SIZE);
-	string[CUT_SIZE-1] = '\0';
-
-	for(i=0;i<6;i++) {
-		string = opp_alloc4(&bstrings, CUT_SIZE, 0, NULL);
-		string[CUT_SIZE-1] = '\0';
-		logger->log(logger->log_data, "%s\n", string);
-
-		if(strstr(test_string, string)) {
-			logger->log(logger->log_data, "Test [OK]\n");
-		} else {
-			logger->log(logger->log_data, "Test 2 [failed]\n");
-			ret = -1;
-		}
-	}
-
-	opp_factory_destroy(&bstrings);
-	return ret;
-}
-
-static int obj_utils_test_helper4(struct pencil_logger*logger) {
-	struct opp_factory bstrings;
-	struct opp_queue queue;
-	const int CUT_SIZE = 8;
-	const char*test_string = "Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space. Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space.";
-	char*string;
-	int ret = 0, i;
-	opp_queue_init2(&queue, 0);
-	opp_factory_create_full(&bstrings, 32, 2, 0, OPPF_SWEEP_ON_UNREF, NULL);
-
-	string = opp_alloc4(&bstrings, strlen(test_string) + 1, 0, NULL);
-	strcpy(string, test_string);
-	logger->log(logger->log_data, "%s\n", string);
-
-	opp_shrink(string, CUT_SIZE);
-	string[CUT_SIZE-1] = '\0';
-
-	for(i=0;i<6;i++) {
-		string = opp_alloc4(&bstrings, CUT_SIZE, 0, NULL);
-		string[CUT_SIZE-1] = '\0';
-		opp_enqueue(&queue, string);
-	}
-	
-	while((string = opp_dequeue(&queue))) {
-		logger->log(logger->log_data, "%s\n", string);
-		if(strstr(test_string, string)) {
-			logger->log(logger->log_data, "Test [OK]\n");
-		} else {
-			logger->log(logger->log_data, "Test 4 [failed]\n");
-			ret = -1;
-		}
-		OPPUNREF(string);
-	}
-	
-	opp_queue_deinit(&queue);
-	opp_factory_destroy(&bstrings);
-	return ret;
-}
-
-static int obj_utils_test_helper3(struct pencil_logger*logger) {
-	struct opp_factory bstrings;
-	const int CUT_SIZE = 8;
-	const char*test_string = "Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space. Need help with Red Hat Enterprise Linux? The Global Support Services portal features comprehensive options to getting assistance in managing your Linux system. You've got Red Hat Enterprise Linux, now get the skills. Check out Red Hat's training courses and industry-acclaimed certifications — the most respected certifications in the Linux space.";
-	char*string, *string2, *string3;
-	int ret = 0;
-	opp_factory_create_full(&bstrings, 256, 2, 0, OPPF_SWEEP_ON_UNREF, NULL);
-
-	string = opp_alloc4(&bstrings, strlen(test_string) + 1, 0, NULL);
-	strcpy(string, test_string);
-	logger->log(logger->log_data, "%s\n", string);
-
-	string2 = opp_alloc4(&bstrings, CUT_SIZE, 0, NULL);
-	logger->log(logger->log_data, "%s\n", string);
-
-	if(strcmp(string, test_string)) {
-		logger->log(logger->log_data, "Test 3 [failed]\n");
-		ret = -1;
-	}
-
-	opp_shrink(string, CUT_SIZE<<1);
-	string3 = opp_alloc4(&bstrings, CUT_SIZE, 0, NULL);
-	OPPUNREF(string);
-	string = opp_alloc4(&bstrings, CUT_SIZE, 0, NULL);
-	
-	opp_factory_destroy(&bstrings);
-	return ret;
-}
-
-static SYNC_UWORD32_T somevalue = 0;
-#define SOME_INC() do {\
-	old_value = somevalue; \
-	new_value += old_value; \
-} while(!sync_do_compare_and_swap(&somevalue,old_value,new_value));
-
-#define SOME_DEC() do {\
-	old_value = somevalue; \
-	new_value += old_value; \
-} while(!sync_do_compare_and_swap(&somevalue,old_value,new_value));
-
-int opp_utils_multithreaded_test() {
-#ifndef SYNC_HAS_ATOMIC_OPERATION
-	return 0;
-#else
-	volatile SYNC_UWORD32_T old_value,new_value;
-	SOME_INC();
-	int i;
-	for(i=0;i<1000;i++) {
-		SOME_INC();
-	}
-	for(i=0;i<1000;i++) {
-		SOME_DEC();
-	}
-	for(i=0;i<1000;i++) {
-		SOME_INC();
-	}
-	for(i=0;i<1000;i++) {
-		SOME_DEC();
-	}
-	SOME_DEC();
-#endif
-	return somevalue;
-}
-
-int opp_utils_test(void (*alog)(void *log_data, const char*fmt, ...), void*alog_data) {
-	int i;
-	struct pencil_logger logger = {
-		.log = alog,
-		.log_data = alog_data,
-	};
-
-	opp_queuesystem_init();
-	for(i=30;i>6;i--) {
-		if(obj_utils_test_helper(i, &logger) != 0) {
-			return -1;
-		}
-	}
-	if(obj_utils_test_search_tree(&logger)) {
-		return -1;
-	}
-	if(obj_utils_test_helper2(&logger)) {
-		return -1;
-	}
-	if(obj_utils_test_helper3(&logger)) {
-		return -1;
-	}
-	if(obj_utils_test_helper4(&logger)) {
-		return -1;
-	}
-	alog(alog_data, "Test Fully [OK]\n");
-	return 0;
-}
-
-#endif
 
 C_CAPSULE_END

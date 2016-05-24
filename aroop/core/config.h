@@ -19,9 +19,17 @@
  *      Author: Kamanashis Roy
  */
 
-#ifndef XULTB_CORE_CONFIG_H
-#define XULTB_CORE_CONFIG_H
+#ifndef AROOP__CORE_CONFIG_H
+#define AROOP__CORE_CONFIG_H
 
+/**
+ * Optimization flags
+ */
+#define OPP_INLINE inline
+
+/**
+ * Concurrency flags
+ */
 #define COMPONENT_SCALABILITY 2
 
 //#ifndef AROOP_CONCATENATED_FILE
@@ -57,4 +65,4 @@
 #define AROOP_MAIN_ENTRY_POINT main
 #endif
 
-#endif //XULTB_CONFIG_H
+#endif //AROOP__CONFIG_H

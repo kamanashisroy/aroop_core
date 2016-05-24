@@ -53,9 +53,6 @@ enum {
 	AROOP_FLAG_SEARCHABLE = OPPF_SEARCHABLE,
 	AROOP_FLAG_INITIALIZE = OPPF_FAST_INITIALIZE,
 	AROOP_FLAG_MEMORY_CLEAN = OPPF_MEMORY_CLEAN,
-#if 0
-	AROOP_FLAG_HAS_LOCK = OPPF_COPY_OBJ_HASH_TO_LIST_ITEM = 1<<5,
-#endif
 };
 // Factory
 #define aroop_alloc_full(x0,x1,x2,x3,x4,x5) ({*(x5)=(typeof((*x5)))opp_alloc4(x0,x1,x2,x3,x4);})

@@ -54,7 +54,7 @@ static int opp_factory_do_all_helper(void*func_data, void*target) {
 
 int aroop_factory_action_all_internal(struct opp_factory*fac, int action, unsigned int flag) {
 	struct aroop_factory_action_data_internal data = {action, flag};
-	opp_factory_do_full(fac, opp_factory_do_all_helper, &data, action == 1?OPPN_ALL:flag, 0, 0);
+	return opp_factory_do_full(fac, opp_factory_do_all_helper, &data, action == 1?OPPN_ALL:flag, 0, 0);
 }
 
 

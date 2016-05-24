@@ -122,7 +122,7 @@ int opp_hash_table_traverse(opp_hash_table_t*ht, int (*cb)(void*cb_data, void*ke
 	struct opp_iterator iterator = {};
 	opp_iterator_create(&iterator, &ht->fac, flags, 0, 0);
 	opp_map_pointer_ext_t*pt;
-	while(pt = opp_iterator_next(&iterator)) {
+	while((pt = opp_iterator_next(&iterator))) {
 		cb(cb_data, pt->key, pt->ptr.obj_data);
 	}
 	opp_iterator_destroy(&iterator);

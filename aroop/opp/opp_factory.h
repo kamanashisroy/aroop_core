@@ -43,6 +43,10 @@
 
 C_CAPSULE_START
 
+/**
+ * @brief object flag
+ * The object flag can be used to mask the objects. It is helpful to partially select objects from the factory.
+ */
 enum {
 	OPPN_ALL = 1<<15,
 	OPPN_INTERNAL_1 = 1<<14,
@@ -50,6 +54,10 @@ enum {
 	OPPN_ZOMBIE = 1<<12,
 };
 
+/**
+ * @brief opp_factory creation flags.
+ * It resolves the internal representation and mechanism of the factory.
+ */
 enum {
 	OPPF_HAS_LOCK = 1,
 	OPPF_SWEEP_ON_UNREF = 1<<1,
@@ -57,15 +65,15 @@ enum {
 	OPPF_SEARCHABLE = 1<<3,
 	OPPF_FAST_INITIALIZE = 1<<4,
 	OPPF_MEMORY_CLEAN = 1<<5,
-#if 0
-	OPPF_COPY_OBJ_HASH_TO_LIST_ITEM = 1<<5,
-#endif
 };
 
 enum {
 	OPPL_POINTER_NOREF = 1<<7,
 };
 
+/**
+ * @brief operations on the objects.
+ */
 enum {
 	OPPN_ACTION_INITIALIZE = 512,
 	OPPN_ACTION_FINALIZE,
