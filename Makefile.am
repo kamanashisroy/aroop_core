@@ -1,4 +1,6 @@
 
+SUBDIRS = factory
+
 TARGET_BIN=test.bin
 TARGET_O=libaroop_core.o
 TARGET_BASIC_O=libaroop_core_basic.o
@@ -8,10 +10,16 @@ TARGET_AR=libaroop_core_static.a libaroop_core_debug.a libaroop_core_nginz.a
 bin_PROGRAMS=$(TARGET_O) $(TARGET_BASIC_O) $(TARGET_HAS_THREAD_O) $(TARGET_BIN)
 lib_LTLIBRARIES=$(TARGET_LAR)
 lib_LIBRARIES=$(TARGET_AR)
+
+AROOP_CORE_FACTORY_SOURCE_FILES = \
+factory/src/opp_factory.c  factory/src/opp_factory_part_alloc.c  factory/src/opp_factory_part_iterator.c  factory/src/opp_factory_part_property.c
+
 AROOP_CORE_SOURCE_FILES = \
 src/aroop_core.c     src/opp_any_obj.c           src/opp_hash.c          src/opp_list.c             src/opp_salt.c         src/opp_watchdog.c \
-src/aroop_factory.c  src/opp_factory.c           src/opp_hash_table.c    src/opp_queue.c            src/opp_str2.c \
-src/aroop_txt.c      src/opp_factory_profiler.c  src/opp_indexed_list.c  src/opp_rbtree_internal.c
+src/aroop_factory.c  src/opp_hash_table.c    src/opp_queue.c            src/opp_str2.c \
+src/aroop_txt.c      src/opp_factory_profiler.c  src/opp_indexed_list.c
+
+AROOP_CORE_SOURCE_FILES += $(AROOP_CORE_FACTORY_SOURCE_FILES)
 
 pkgincludedir=$(includedir)/aroop_core@PACKAGE_SUFFIX@
 nobase_pkginclude_HEADERS= \
@@ -23,7 +31,7 @@ aroop/core/config.h  aroop/core/decorator.h  aroop/core/logger.h  aroop/core/mem
 aroop/platform/linux/linux_config.h  aroop/platform/linux/linux_graphics.h  aroop/platform/linux/linux_logger.h \
 aroop/platform/raspberrypi/raspberry_pi_bare_metal_config.h aroop/platform/raspberrypi/raspberry_pi_bare_metal_logger.h
 
-AROOP_CORE_INCLUDES=-Iaroop
+AROOP_CORE_INCLUDES=-Iaroop -Ifactory/inc
 
 libaroop_core_la_SOURCES = $(AROOP_CORE_SOURCE_FILES)
 libaroop_core_la_CPPFLAGS = $(AROOP_CORE_CFLAGS) $(AROOP_CORE_INCLUDES)

@@ -16,6 +16,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([dist-bzip2 subdir-objects])
 AM_MAINTAINER_MODE
+AM_PATH_CHECK()
 
 AROOP_CORE_MAJOR_VERSION=aroop_core_major
 AROOP_CORE_MINOR_VERSION=aroop_core_minor
@@ -45,8 +46,11 @@ AC_PROG_LIBTOOL
 AC_PROG_RANLIB
 
 
-AC_CONFIG_FILES([Makefile
-           aroop_core.pc
+AC_CONFIG_FILES([
+		factory/Makefile
+		factory/tests/Makefile
+		Makefile
+		aroop_core.pc
            ])
 
 AC_OUTPUT
