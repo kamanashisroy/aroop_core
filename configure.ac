@@ -53,8 +53,9 @@ AC_CONFIG_FILES([
 		collection/tests/Makefile
 		aroop/Makefile
 		aroop/tests/Makefile
+		includes/Makefile
+		includes/aroop_core.pc
 		Makefile
-		aroop/aroop_core.pc
            ])
 
 AC_OUTPUT

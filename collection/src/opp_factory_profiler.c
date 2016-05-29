@@ -234,7 +234,7 @@ void opp_factory_profiler_get_total_memory(int*grasped,int*really_allocated) {
 	*really_allocated = prof.total_allocated;
 }
 
-#ifdef AROOP_OPP_DEBUG
+#if 0
 #include "core/xtring.h"
 static int opp_factory_profiler_assert_no_module_helper(void*func_data, void*content) {
 	char*module_name = (char*)func_data;

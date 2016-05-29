@@ -28,7 +28,7 @@
 #include "aroop/opp/opp_factory_profiler.h"
 #include "aroop/opp/opp_type.h"
 #include "aroop/opp/opp_io.h"
-#ifdef AROOP_OPP_DEBUG
+#if 0
 #include "aroop/core/xtring.h"
 #endif
 #endif
@@ -81,7 +81,7 @@ OPP_CB(any_obj) {
 	}
 	return 0;
 }
-#ifdef AROOP_OPP_DEBUG
+#if 0
 #include "core/xtring.h"
 static int opp_any_obj_assert_no_module_helper(void*func_data, void*content) {
 	char*module_name = (char*)func_data;
