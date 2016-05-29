@@ -1,13 +1,16 @@
 
-#include <aroop/aroop_core.h>
-#include <aroop/core/thread.h>
-#include <aroop/core/xtring.h>
-#include <aroop/opp/opp_factory.h>
-#include <aroop/opp/opp_factory_profiler.h>
-#include <aroop/opp/opp_any_obj.h>
-#include <aroop/opp/opp_str2.h>
-#include <aroop/aroop_memory_profiler.h>
+#include <check.h>
+#include "aroop/core/config.h"
+#include "aroop/core/memory.h"
+#include "aroop/opp/opp_factory.h"
+#include "aroop/opp/opp_list.h"
+#include "aroop/opp/opp_queue.h"
+#include "aroop/core/logger.h"
+#include "aroop/opp/opp_watchdog.h"
+#include "aroop/opp/opp_iterator.h"
+#include "aroop/opp/opp_factory_profiler.h"
 
+C_CAPSULE_START
 typedef struct avlnode {
 	int key;
 	int height;
@@ -23,7 +26,7 @@ typedef struct avlnode {
  * - Height is defined as the longest path to the leaf. So the height of a leaf is 0.
  * - Height of an internal node is max(height of children)
  */
-void avlnode_fixHeight(avlnode_t*node) {
+static void avlnode_fixHeight(avlnode_t*node) {
 	node->height = 0;
 	if(node->right && (node->right->height > (node->height-1))) {
 		node->height = node->right->height+1;
@@ -36,7 +39,7 @@ void avlnode_fixHeight(avlnode_t*node) {
 		avlnode_fixHeight(node->parent);
 }
 
-avlnode_t*avlnode_rotateRight(avlnode_t*node) {
+static avlnode_t*avlnode_rotateRight(avlnode_t*node) {
 	assert(node->left != NULL);
 	//cout << " rotating right " << key << endl;
 	avlnode_t*head = node->left;
@@ -66,7 +69,7 @@ avlnode_t*avlnode_rotateRight(avlnode_t*node) {
 	return head;
 }
 
-avlnode_t*avlnode_rotateLeft(avlnode_t*node) {
+static avlnode_t*avlnode_rotateLeft(avlnode_t*node) {
 	assert(node->right != NULL);
 	//cout << " rotating left " << key << endl;
 	avlnode_t*head = node->right;
@@ -95,7 +98,7 @@ avlnode_t*avlnode_rotateLeft(avlnode_t*node) {
 	return head;
 }
 
-avlnode_t*avlnode_fixAVLProperty(avlnode_t*node) {
+static avlnode_t*avlnode_fixAVLProperty(avlnode_t*node) {
 	int rheight = (node->right?node->right->height:-1);
 	int lheight = (node->left?node->left->height:-1);
 	int diff = lheight - rheight;
@@ -165,7 +168,7 @@ avlnode_t*avlnode_search(avlnode_t*node, int given) {
 }
 // TODO remove node
 
-void avlnode_dump(avlnode_t*node) { // prints tree in preorder
+static void avlnode_dump(avlnode_t*node) { // prints tree in preorder
 	printf("%d", node->key);
 	printf("(");
 	if(node->left)
@@ -235,11 +238,12 @@ static int test_search(const int n, const int x) {
 		printf("not found %d \n", x);
 	}
 	OPPUNREF(root);
-	assert(OPP_FACTORY_USE_COUNT(&node_factory) == 0);
+	ck_assert(OPP_FACTORY_USE_COUNT(&node_factory) == 0);
 	return 0;
 }
 
-int binary_tree_test(int argc, char*argv[]) {
+START_TEST (binary_tree_test)
+{
 	OPP_FACTORY_CREATE(&node_factory, 128, sizeof(struct avlnode), OPP_CB_FUNC(avlnode));
 	test_search(15, 3);
 	test_search(1000, 3343);
@@ -249,4 +253,36 @@ int binary_tree_test(int argc, char*argv[]) {
 	test_search(8000, 456);
 	return 0;
 }
+END_TEST
 
+
+Suite * binary_tree_test_suit(void) {
+	Suite *s;
+	TCase *tc_core;
+	s = suite_create("check_avl_tree_partition_test.c");
+
+	/* Core test case */
+	tc_core = tcase_create("Core");
+
+	tcase_add_test(tc_core, binary_tree_test);
+	suite_add_tcase(s, tc_core);
+
+	return s;
+}
+
+
+int main() {
+	int number_failed;
+	Suite *s;
+	SRunner *sr;
+
+	s = binary_tree_test_suit();
+	sr = srunner_create(s);
+
+	srunner_run_all(sr, CK_NORMAL);
+	number_failed = srunner_ntests_failed(sr);
+	srunner_free(sr);
+	return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+C_CAPSULE_END
