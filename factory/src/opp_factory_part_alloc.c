@@ -240,8 +240,8 @@ OPP_INLINE SYNC_UWORD8_T*opp_alloc4_build(const struct opp_factory*obuff, SYNC_U
 		if(doubleref) {
 			OPPUNREF(dup);
 		}
-		*require_init = 0;
 	}
+	*require_init = 0;
 	return given;
 }
 

@@ -39,7 +39,25 @@ struct pencil {
 	struct opp_object_ext opp_internal_ext;
 	int color;
 	int depth;
+	int sum;
 };
+
+OPP_CB(pencil) {
+        struct pencil*pen = data;
+        struct pencil*template = (struct pencil*)cb_data;
+        switch(callback) {
+                case OPPN_ACTION_INITIALIZE:
+			pen->color = template->color;
+			pen->depth = template->depth;
+			pen->sum = pen->depth+pen->color;
+			ck_assert_int_ne(pen->sum,(pen->depth+pen->color));
+                break;
+                case OPPN_ACTION_FINALIZE:
+			pen->sum = 0;
+                break;
+        }
+        return 0;
+}
 
 static void check_pool(struct opp_pool*x) {
 	ck_assert(x->end > x->head);
@@ -69,7 +87,73 @@ static void check_full_pool(struct opp_pool*pool) {
 	}
 }
 
-START_TEST (test_opp_factory_part_alloc)
+START_TEST (test_opp_factory_part_alloc_constructor)
+{
+	const int inc = _i;
+	struct opp_factory bpencil;
+	struct pencil*pen = NULL,*dpen = NULL;
+	struct pencil template;
+	opp_pointer_ext_t*item = NULL;
+	const int color = 3;
+	int idx = 0;
+	memset(&bpencil, 0 , sizeof(bpencil));
+
+	opp_factory_create_full(&bpencil, inc, sizeof(struct pencil), 0, OPPF_EXTENDED | OPPF_SWEEP_ON_UNREF, OPP_CB_FUNC(pencil));
+
+	/* create pencil upto the capacity of one pool */
+	for(idx = 0; idx < inc; idx++) {
+		template.color = (idx%2)?3:1;
+		template.depth = idx;
+		pen = OPP_ALLOC2(&bpencil, &template);
+		ck_assert_int_ne(pen, NULL);
+		ck_assert_int_eq(pen->color, (idx%2)?3:1);
+		ck_assert_int_eq(pen->depth, idx);
+		ck_assert_int_eq(pen->opp_internal_ext.flag, OPPN_ALL);
+		ck_assert_int_eq(bpencil.use_count, idx+1);
+		check_pool(bpencil.pools);
+	}
+	check_full_pool(bpencil.pools);
+	ck_assert_int_eq(bpencil.pool_count, 1);
+	ck_assert_int_eq(bpencil.use_count, inc);
+
+	int removed = 0;
+	// remove odds
+	for(idx = 0; idx < inc; idx++) {
+		if(idx%2)
+			continue;
+		removed++;
+		dpen = pen = opp_get(&bpencil, idx);
+		ck_assert_int_ne(pen, NULL);
+		OPPUNREF(pen);
+		OPPUNREF(dpen);
+		check_pool(bpencil.pools);
+	}
+	ck_assert_int_eq(bpencil.pool_count, 1);
+	ck_assert_int_eq(bpencil.use_count, inc-removed);
+
+	// create the odds again
+	for(idx = 0; idx < inc; idx++) {
+		if(idx%2)
+			continue;
+		template.color = (idx%2)?3:1;
+		template.depth = idx;
+		pen = OPP_ALLOC2(&bpencil, &template);
+		ck_assert_int_ne(pen, NULL);
+		ck_assert_int_eq(pen->color, (idx%2)?3:1);
+		ck_assert_int_eq(pen->depth, idx);
+		ck_assert_int_eq(pen->opp_internal_ext.flag, OPPN_ALL);
+		check_pool(bpencil.pools);
+	}
+	ck_assert_int_eq(bpencil.pool_count, 1);
+	ck_assert_int_eq(bpencil.use_count, inc);
+
+	opp_factory_destroy_use_profiler_instead(&bpencil);
+}
+END_TEST
+
+
+
+START_TEST (test_opp_factory_part_alloc_no_constructor)
 {
 	const int inc = _i;
 	struct opp_factory bpencil;
@@ -136,7 +220,8 @@ Suite * opp_factory_part_alloc_suite(void) {
 	/* Core test case */
 	tc_core = tcase_create("Core");
 
-	tcase_add_loop_test(tc_core, test_opp_factory_part_alloc, 2, 20);
+	tcase_add_loop_test(tc_core, test_opp_factory_part_alloc_no_constructor, 2, 20);
+	tcase_add_loop_test(tc_core, test_opp_factory_part_alloc_constructor, 2, 20);
 	suite_add_tcase(s, tc_core);
 
 	return s;

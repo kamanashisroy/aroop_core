@@ -14,6 +14,6 @@ aroopc=${bindir}/aroopc@PACKAGE_SUFFIX@
 Name: Aroop core
 Description: The Aroop core library
 Version: @VERSION@
-Libs: -L${libdir} -laroop_core
-Libs.private: ${libdir}/libaroop_core_${variant}.la
+Libs: -L${libdir} -laroop_core_${variant}
+Libs.private: ${libdir}/libaroop_core_${variant}.a
 Cflags: -I${includedir}
