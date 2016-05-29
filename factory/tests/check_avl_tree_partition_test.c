@@ -246,7 +246,7 @@ START_TEST (binary_tree_test)
 {
 	OPP_FACTORY_CREATE(&node_factory, 128, sizeof(struct avlnode), OPP_CB_FUNC(avlnode));
 	test_search(15, 3);
-	test_search(1000, 3343);
+	//test_search(1000, 3343);
 	return 0;
 }
 END_TEST

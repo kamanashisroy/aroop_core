@@ -49,8 +49,8 @@ OPP_CB(pencil) {
                 case OPPN_ACTION_INITIALIZE:
 			pen->color = template->color;
 			pen->depth = template->depth;
-			pen->sum = pen->depth+pen->color;
 			ck_assert_int_ne(pen->sum,(pen->depth+pen->color));
+			pen->sum = pen->depth+pen->color;
                 break;
                 case OPPN_ACTION_FINALIZE:
 			pen->sum = 0;
@@ -67,18 +67,31 @@ static void check_pool(struct opp_pool*x) {
 	ck_assert_int_eq(((BITSTRING_TYPE*)(x+1)), x->bitstring);
 }
 
-static void check_full_pool(struct opp_pool*pool) {
+
+
+static void check_full_pool(struct opp_pool*pool, int deleted_evens) {
 	struct opp_object*obj = NULL;
 	check_pool(pool);
 	SYNC_UWORD8_T bit_idx = 0;
+	int idx = 0;
 	for(obj = (struct opp_object*)pool->head, bit_idx = 0
 		; obj < (struct opp_object*)pool->end
-		; bit_idx++, obj = (struct opp_object*)(((SYNC_UWORD8_T*)obj) + sizeof(struct pencil) + sizeof(struct opp_object))) {
+		; bit_idx++, idx++, obj = (struct opp_object*)(((SYNC_UWORD8_T*)obj) + sizeof(struct pencil) + sizeof(struct opp_object))) {
 
+		if(deleted_evens && !(idx%2)) {
+			/* check initialization flag */
+			ck_assert(!(*(obj->bitstring) & ( 1 << obj->bit_idx)));
+			continue;
+		}
 		/* check opp_object */
 		ck_assert_int_eq(obj->bit_idx, bit_idx);
 		ck_assert(obj->bitstring == pool->bitstring);
 		ck_assert(obj->slots == 1);
+
+		/* check initialization flag */
+		ck_assert((*(obj->bitstring) & ( 1 << obj->bit_idx)));
+		/* check finalization flag */
+		ck_assert((*(obj->bitstring+BITFIELD_FINALIZE) & ( 1 << obj->bit_idx)));
 
 		/* check pencil */
 		struct pencil*pen = (struct pencil*)(obj+1);
@@ -112,7 +125,7 @@ START_TEST (test_opp_factory_part_alloc_constructor)
 		ck_assert_int_eq(bpencil.use_count, idx+1);
 		check_pool(bpencil.pools);
 	}
-	check_full_pool(bpencil.pools);
+	check_full_pool(bpencil.pools, 0);
 	ck_assert_int_eq(bpencil.pool_count, 1);
 	ck_assert_int_eq(bpencil.use_count, inc);
 
@@ -128,6 +141,7 @@ START_TEST (test_opp_factory_part_alloc_constructor)
 		OPPUNREF(dpen);
 		check_pool(bpencil.pools);
 	}
+	check_full_pool(bpencil.pools, 1);
 	ck_assert_int_eq(bpencil.pool_count, 1);
 	ck_assert_int_eq(bpencil.use_count, inc-removed);
 
@@ -175,7 +189,7 @@ START_TEST (test_opp_factory_part_alloc_no_constructor)
 		ck_assert_int_eq(bpencil.use_count, idx+1);
 		check_pool(bpencil.pools);
 	}
-	check_full_pool(bpencil.pools);
+	check_full_pool(bpencil.pools, 0);
 	ck_assert_int_eq(bpencil.pool_count, 1);
 	ck_assert_int_eq(bpencil.use_count, inc);
 
@@ -191,6 +205,7 @@ START_TEST (test_opp_factory_part_alloc_no_constructor)
 		OPPUNREF(dpen);
 		check_pool(bpencil.pools);
 	}
+	check_full_pool(bpencil.pools, 1);
 	ck_assert_int_eq(bpencil.pool_count, 1);
 	ck_assert_int_eq(bpencil.use_count, inc-removed);
 
