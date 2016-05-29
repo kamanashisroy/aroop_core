@@ -49,6 +49,10 @@ AC_PROG_RANLIB
 AC_CONFIG_FILES([
 		factory/Makefile
 		factory/tests/Makefile
+		collection/Makefile
+		collection/tests/Makefile
+		aroop/Makefile
+		aroop/tests/Makefile
 		Makefile
 		aroop_core.pc
            ])

@@ -63,7 +63,7 @@ OPP_INLINE struct opp_pool*opp_factory_create_pool_donot_use(struct opp_factory*
 	opp_factory_profiler_checkleak();
 
 	SYNC_UWORD8_T*ret = (SYNC_UWORD8_T*)(pool+1);
-	// clear memory
+	/* clear bitstring */
 	memset(ret, 0, obuff->bitstring_size);
 	// setup pool
 	pool->bitstring = (BITSTRING_TYPE*)ret;
@@ -227,14 +227,14 @@ OPP_INLINE static void opp_alloc4_object_setup(struct opp_object*obj, const SYNC
 	*(obj->bitstring) |= ( 1 << obj->bit_idx); // mark as used
 }
 
-OPP_INLINE SYNC_UWORD8_T*opp_alloc4_build(const struct opp_factory*obuff, SYNC_UWORD8_T*given, SYNC_UWORD8_T doubleref, SYNC_UWORD8_T*require_clean, SYNC_UWORD8_T*require_init, void*init_data, va_list*ap) {
+OPP_INLINE SYNC_UWORD8_T*opp_alloc4_build(const struct opp_factory*obuff, SYNC_UWORD8_T*given, SYNC_UWORD8_T doubleref, SYNC_UWORD8_T*require_clean, SYNC_UWORD8_T*require_init, void*init_data, const SYNC_UWORD8_T slot_count, va_list ap) {
 	if(*require_clean) {
 		opp_force_memclean(given);
 		*require_clean = 0;
 	}
-	if((*require_init) && obuff->callback(given, OPPN_ACTION_INITIALIZE
+	if((*require_init) && obuff->callback && obuff->callback(given, OPPN_ACTION_INITIALIZE
 				, init_data
-				, *ap, (((struct opp_object*)given)-1)->slots*obuff->obj_size - sizeof(struct opp_object))) {
+				,  ap, slot_count*obuff->obj_size - sizeof(struct opp_object))) {
 		void*dup = given;
 		OPPUNREF(given);
 		if(doubleref) {
@@ -313,7 +313,7 @@ void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T dou
 	}
 
 	if(ret && !(obuff->property & OPPF_FAST_INITIALIZE) && obuff->callback) {
-		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, &ap);
+		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, slot_count, ap);
 	}
 #ifdef OPP_DEBUG
 	if(obuff->pools && obuff->pools->bitstring) {
@@ -327,7 +327,7 @@ void*opp_alloc4(struct opp_factory*obuff, SYNC_UWORD16_T size, SYNC_UWORD8_T dou
 	DO_AUTO_GC_CHECK(obuff);
 	OPP_UNLOCK(obuff);
 	if(ret) {
-		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, &ap);
+		ret = opp_alloc4_build(obuff, ret, doubleref, &require_clean, &require_init, init_data, slot_count, ap);
 	}
 	va_end(ap);
 //	SYNC_ASSERT(ret);

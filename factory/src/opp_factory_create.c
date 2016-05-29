@@ -92,4 +92,32 @@ int opp_factory_create_full(struct opp_factory*obuff
 	return 0;
 }
 
+void opp_factory_destroy_use_profiler_instead(struct opp_factory*obuff) {
+	BITSTRING_TYPE*bitstring;
+	int k;
+	struct opp_pool*pool;
+	if(obuff->sign != OPPF_INITIALIZED_INTERNAL) {
+		return;
+	}
+
+	OPP_LOCK(obuff);
+	for(pool = obuff->pools;pool;pool = pool->next) {
+		CHECK_POOL(pool);
+		bitstring = pool->bitstring;
+		for(k=0;BITSTRING_IDX_TO_BITS(k) < obuff->pool_size;k++,bitstring+=BITFIELD_SIZE) {
+			*bitstring = 0;
+		}
+	}
+	opp_factory_gc_nolock(obuff);
+	obuff->sign = 1;
+	OPP_UNLOCK(obuff);
+#ifdef OPP_BUFFER_HAS_LOCK
+	if((obuff->property &  OPPF_HAS_LOCK)) {
+		sync_mutex_destroy(&obuff->lock);
+	}
+#endif
+}
+
+
+
 C_CAPSULE_END
