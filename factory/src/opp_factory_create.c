@@ -35,7 +35,8 @@
 
 C_CAPSULE_START
 
-int opp_factory_create_full(struct opp_factory*obuff
+
+OPP_INLINE int opp_factory_create_full(struct opp_factory*obuff
 		, SYNC_UWORD16_T inc
 		, SYNC_UWORD16_T obj_size
 		, int token_offset
@@ -52,39 +53,62 @@ int opp_factory_create_full(struct opp_factory*obuff
 
 	if(obuff->sign == OPPF_INITIALIZED_INTERNAL) {
 		SYNC_LOG(SYNC_ERROR, "obj is already initiated\n");
-		SYNC_ASSERT(!"obj is already initiated\n");
+		SYNC_ASSERT(obuff->sign != OPPF_INITIALIZED_INTERNAL);
 		return -1;
 	}
-	obuff->sign = OPPF_INITIALIZED_INTERNAL;
+	/* check possible leak capacity */
+	if(inc >= 0x7FFF) {
+		SYNC_LOG(SYNC_ERROR, "too big allocation\n");
+		SYNC_ASSERT(inc < 0x7FFF);
+		return -1;
+	}
+	/* pool size */
+	const SYNC_UWORD16_T pool_size = inc;
+	/* obj size */
+	SYNC_UWORD16_T fixed_obj_size = obj_size + sizeof(struct opp_object);
+	fixed_obj_size = OPP_NORMALIZE_SIZE(fixed_obj_size);
+	/* bitstring size */
+	unsigned long long bitstring_size = (inc+7) >> 3;
+	bitstring_size = OPP_NORMALIZE_SIZE(bitstring_size);
+	bitstring_size = bitstring_size*BITFIELD_SIZE;
+	/* check possible leak */
+	if(bitstring_size >=  0x7FFF) {
+		SYNC_LOG(SYNC_ERROR, "too big allocation\n");
+		SYNC_ASSERT(bitstring_size < 0x7FFF);
+		return -1;
+	}
+	const unsigned long long memory_chunk_size = sizeof(struct opp_pool) + fixed_obj_size*pool_size + bitstring_size;
+	/* check possible leak */
+	if(0x7FFFFFFF < memory_chunk_size) {
+		SYNC_LOG(SYNC_ERROR, "too big allocation\n");
+		SYNC_ASSERT(0x7FFFFFFF > memory_chunk_size);
+		return -1;
+	}
+#ifndef OBJ_MAX_BUFFER_SIZE
+#define OBJ_MAX_BUFFER_SIZE (4096<<10)
+#endif
+	SYNC_ASSERT(obuff->memory_chunk_size < OBJ_MAX_BUFFER_SIZE);
+	struct opp_factory template = {
+		.sign = OPPF_INITIALIZED_INTERNAL,
+		.pool_size = pool_size,
+		.pool_count = 0,
+		.use_count = 0,
+		.slot_use_count = 0,
+		.token_offset = token_offset,
+		.obj_size = fixed_obj_size,
+		.bitstring_size = bitstring_size,
+		.memory_chunk_size = memory_chunk_size,
+		.internal_flags = 0,
+		.property = property | OPPF_SWEEP_ON_UNREF,
+		.callback = callback,
+		.pools = NULL,
+	};
+	memcpy(obuff, &template, sizeof(template));
 #ifdef OPP_BUFFER_HAS_LOCK
 	if(property & OPPF_HAS_LOCK) {
 		sync_mutex_init(&obuff->lock);
 	}
 #endif
-	obuff->property = property | OPPF_SWEEP_ON_UNREF; // force sweep
-	obuff->pool_size = inc;
-	obuff->obj_size = obj_size + sizeof(struct opp_object);
-	obuff->obj_size = OPP_NORMALIZE_SIZE(obuff->obj_size);
-//	obuff->initialize = initialize;
-//	obuff->finalize = finalize;
-	obuff->callback = callback;
-	obuff->bitstring_size = (inc+7) >> 3;
-	obuff->bitstring_size = OPP_NORMALIZE_SIZE(obuff->bitstring_size);
-	obuff->bitstring_size = obuff->bitstring_size*BITFIELD_SIZE;
-	obuff->memory_chunk_size = sizeof(struct opp_pool) + obuff->obj_size*inc + obuff->bitstring_size;
-	obuff->token_offset = token_offset;
-
-	obuff->pool_count = 0;
-	obuff->use_count = 0;
-	obuff->slot_use_count = 0;
-	obuff->pools = NULL;
-	obuff->internal_flags = 0;
-
-#ifndef OBJ_MAX_BUFFER_SIZE
-#define OBJ_MAX_BUFFER_SIZE (4096<<10)
-#endif
-	SYNC_ASSERT(obuff->memory_chunk_size < OBJ_MAX_BUFFER_SIZE);
-
 	if(property & OPPF_SEARCHABLE) {
 		SYNC_ASSERT(property & OPPF_EXTENDED);
 		opp_lookup_table_init(&obuff->tree, 0);
@@ -94,7 +118,7 @@ int opp_factory_create_full(struct opp_factory*obuff
 
 void opp_factory_destroy_use_profiler_instead(struct opp_factory*obuff) {
 	BITSTRING_TYPE*bitstring;
-	int k;
+	unsigned long k;
 	struct opp_pool*pool;
 	if(obuff->sign != OPPF_INITIALIZED_INTERNAL) {
 		return;

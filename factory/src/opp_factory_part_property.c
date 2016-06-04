@@ -318,6 +318,7 @@ void*opp_ref(void*data, const char*filename, int lineno) {
 		if(!oldval || newval > 40000) {
 			return NULL;
 		}
+		SYNC_ASSERT(oldval < 10);
 		if(sync_do_compare_and_swap(&(obj->refcount), oldval, newval)) {
 			break;
 		}

@@ -102,20 +102,20 @@ typedef int (*opp_callback_t)(void*data, int callback, void*cb_data, va_list ap,
 //#define OPP_HAS_RECYCLING // do not use this
 struct opp_factory {
 	SYNC_UWORD16_T sign;
-	SYNC_UWORD16_T pool_size;
+	const SYNC_UWORD16_T pool_size;
 	SYNC_UWORD16_T pool_count;
 	OPP_VOLATILE_VAR SYNC_UWORD16_T use_count;
 	OPP_VOLATILE_VAR SYNC_UWORD16_T slot_use_count;
-	SYNC_UWORD16_T token_offset;
-	SYNC_UWORD16_T obj_size;
-	SYNC_UWORD16_T bitstring_size;
-	SYNC_UWORD32_T memory_chunk_size;
+	const SYNC_UWORD16_T token_offset;
+	const SYNC_UWORD16_T obj_size;
+	const SYNC_UWORD16_T bitstring_size;
+	const SYNC_UWORD32_T memory_chunk_size;
 	SYNC_UWORD8_T internal_flags;
-	opp_property_t property;
+	const opp_property_t property;
 #ifdef OPP_BUFFER_HAS_LOCK
 	sync_mutex_t lock;
 #endif
-	opp_callback_t callback;
+	const opp_callback_t callback;
 	struct opp_pool*pools;
 	opp_lookup_table_t tree;
 };
@@ -134,7 +134,7 @@ int opp_##x##_callback(void*data, int callback, void*cb_data, va_list ap, int si
 #define OPP_CB_FUNC(x) opp_##x##_callback
 
 #define OPP_FACTORY_CREATE(obuff, x, y, z) ({opp_factory_create_full(obuff, x, y, 1, OPPF_HAS_LOCK | OPPF_SWEEP_ON_UNREF, z);})
-int opp_factory_create_full(struct opp_factory*obuff
+OPP_INLINE int opp_factory_create_full(struct opp_factory*obuff
 		, SYNC_UWORD16_T inc
 		, SYNC_UWORD16_T obj_size
 		, int token_offset

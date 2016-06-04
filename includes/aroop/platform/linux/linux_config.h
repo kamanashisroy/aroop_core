@@ -43,10 +43,10 @@ typedef int8_t SYNC_SWORD8_T;
 typedef int16_t SYNC_SWORD16_T;
 typedef int32_t SYNC_SWORD32_T;
 
-#ifdef AROOP_OPP_DEBUG
-#define SYNC_ASSERT(x) assert(x)
-#else
+#ifdef AROOP_PRODUCTION
 #define SYNC_ASSERT(x) ({(x) && 1;})
+#else
+#define SYNC_ASSERT(x) assert(x)
 #endif
 
 #define aroop_printf printf

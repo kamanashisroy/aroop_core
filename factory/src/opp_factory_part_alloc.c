@@ -128,7 +128,7 @@ OPP_INLINE static void opp_alloc4_init_object_bit_index(struct opp_object*obj, c
 }
 
 OPP_INLINE static SYNC_UWORD8_T*opp_alloc4_find_space(const struct opp_pool*pool, const SYNC_UWORD16_T pool_size, const SYNC_UWORD8_T slot_count, const SYNC_UWORD16_T obj_size, SYNC_UWORD16_T*obj_seq) {
-	int k = 0;
+	unsigned long k = 0;
 	BITSTRING_TYPE*bitstring = pool->bitstring;
 	for(;BITSTRING_IDX_TO_BITS(k) < pool_size;k++,bitstring+=BITFIELD_SIZE) {
 		// find first 0
@@ -172,6 +172,10 @@ OPP_INLINE static SYNC_UWORD8_T*opp_alloc4_find_space(const struct opp_pool*pool
 			 * We have found some space
 			 */
 			const SYNC_UWORD16_T obj_idx = *obj_seq = BITSTRING_IDX_TO_BITS(k) + bit_idx;
+			if(obj_idx >= pool_size) { /* we are overflowing the buffer */
+				bsv &= ~mask;
+				continue;
+			}
 			SYNC_ASSERT(obj_idx < pool_size);
 			SYNC_UWORD8_T*ret = (pool->head + obj_idx*obj_size);
 			opp_alloc4_init_object_bit_index((struct opp_object*)ret, bit_idx, bitstring, slot_count);
