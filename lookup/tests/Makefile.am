@@ -3,7 +3,7 @@ check_PROGRAMS = check_opp_hash_otable
 
 
 AROOP_CORE_INCLUDES=-I$(top_builddir)/includes
-OPP_COLLECTION_LIBS=$(top_builddir)/factory/libopp_factory.la $(top_builddir)/collection/libopp_collection.la
+OPP_COLLECTION_LIBS=$(top_builddir)/factory/libopp_debug_factory.la $(top_builddir)/collection/libopp_debug_collection.la $(top_builddir)/lookup/libopp_debug_lookup.la
 
 check_opp_hash_otable_SOURCES = check_opp_hash_otable.c
 check_opp_hash_otable_CFLAGS = @CHECK_CFLAGS@ $(AROOP_CORE_INCLUDES)

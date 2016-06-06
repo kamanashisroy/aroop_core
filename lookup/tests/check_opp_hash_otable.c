@@ -33,27 +33,56 @@
 #include "aroop/opp/opp_factory_profiler.h"
 #include "aroop/opp/opp_hash_table.h"
 #include "aroop/opp/opp_hash_otable.h"
-#include "aroop/core/xtring.h"
 
 C_CAPSULE_START
+
+struct test_obj {
+	long long token;
+};
+
+static opp_hash_t test_obj_get_hash(void*unused, const void*data) {
+	const struct test_obj*key = data;
+	return key->token;
+}
+
+static int test_obj_is_equal(void*unused, const void*x, const void*y) {
+	const struct test_obj*xobj = x;
+	const struct test_obj*yobj = y;
+	return xobj->token == yobj->token;
+}
+
+opp_hash_function_t test_obj_hash_func = {.aroop_closure_data = NULL, .aroop_cb = test_obj_get_hash};
+opp_equals_t test_obj_equals_func = {.aroop_closure_data = NULL, .aroop_cb = test_obj_is_equal};
 
 
 START_TEST (test_opp_hash_otable)
 {
 	opp_map_pointer_t*arr[10];
 	opp_hash_otable_t otable;
-	opp_hash_otable_create(&otable, arr, 10, 10, 0, aroop_txt_get_hash_cb, aroop_txt_equals_cb);
+	opp_hash_otable_create(&otable, &arr, 10, 10, 0, test_obj_hash_func, test_obj_equals_func);
+	ck_assert_int_eq(otable.collision, 0);
 	
-	aroop_txt_t some_text = {};
-	aroop_txt_embeded_set_static_string(&some_text, "fine");
-	aroop_txt_t*content = aroop_txt_new_copy_deep(&some_text, NULL); // We must create xtring not extring ..
+	struct opp_factory obuff;
+	int status = opp_factory_create_full(&obuff, 10, sizeof(struct test_obj), 0, OPPF_SWEEP_ON_UNREF, NULL);
+
+	ck_assert_int_eq(status, 0);
+
+	struct test_obj*content = OPP_ALLOC2(&obuff, NULL);
+	content->token = 100;
+	ck_assert(content != NULL);
+
 	opp_hash_otable_set(&otable, content, content);
-	aroop_txt_t*output = opp_hash_otable_get(&otable, content);
+	ck_assert_int_eq(otable.collision, 0);
+	struct test_obj*output = opp_hash_otable_get_no_ref(&otable, content);
+	ck_assert_int_eq(otable.collision, 0);
+	output = opp_hash_otable_get(&otable, content);
+	ck_assert_int_eq(otable.collision, 0);
 
 	ck_assert_int_eq(content, output);
 	ck_assert_int_eq(otable.collision, 0);
 
 	opp_hash_otable_destroy(&otable);
+	opp_factory_destroy_and_remove_profile(&obuff);
 }
 END_TEST
 
@@ -63,7 +92,7 @@ Suite * opp_hash_otable_suite(void) {
 	s = suite_create("opp_hash_otable.c");
 
 	/* Core test case */
-	tc_core = tcase_create("Core");
+	tc_core = tcase_create("lookup");
 
 	tcase_add_test(tc_core, test_opp_hash_otable);
 	suite_add_tcase(s, tc_core);
@@ -80,7 +109,8 @@ int main() {
 	s = opp_hash_otable_suite();
 	sr = srunner_create(s);
 
-	srunner_run_all(sr, CK_NORMAL);
+	//srunner_run_all(sr, CK_NORMAL);
+	srunner_run_all(sr, CK_NOFORK);
 	number_failed = srunner_ntests_failed(sr);
 	srunner_free(sr);
 	return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;

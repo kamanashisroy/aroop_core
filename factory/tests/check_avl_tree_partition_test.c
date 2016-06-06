@@ -258,7 +258,7 @@ Suite * binary_tree_test_suit(void) {
 	s = suite_create("check_avl_tree_partition_test.c");
 
 	/* Core test case */
-	tc_core = tcase_create("Core");
+	tc_core = tcase_create("factory");
 
 	tcase_add_test(tc_core, binary_tree_test);
 	suite_add_tcase(s, tc_core);
