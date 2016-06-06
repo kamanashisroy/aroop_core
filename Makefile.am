@@ -8,5 +8,5 @@ export AROOP_OPT_CFLAG
 AROOP_PROFILED_CFLAG =  -O3 -DAROOP_BASIC -DAROOP_OPP_PROFILE
 export AROOP_PROFILED_CFLAG
 
-SUBDIRS = factory collection aroop includes
+SUBDIRS = factory collection lookup aroop includes
 

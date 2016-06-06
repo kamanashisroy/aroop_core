@@ -12,9 +12,9 @@ src/aroop_core.c	src/aroop_factory.c	src/aroop_txt.c
 #OPP_DEBUG_COLLECTION_LIBS=-Wl,--whole-archive $(top_builddir)/factory/libopp_debug_factory.a $(top_builddir)/collection/libopp_debug_collection.a -Wl,--no-whole-archive
 #OPP_PROFILED_COLLECTION_LIBS=-Wl,--whole-archive $(top_builddir)/factory/libopp_profiled_factory.a $(top_builddir)/collection/libopp_profiled_collection.a -Wl,--no-whole-archive
 
-OPP_COLLECTION_LIBS=$(top_builddir)/factory/libopp_factory.la $(top_builddir)/collection/libopp_collection.la
-OPP_DEBUG_COLLECTION_LIBS=$(top_builddir)/factory/libopp_debug_factory.la $(top_builddir)/collection/libopp_debug_collection.la
-OPP_PROFILED_COLLECTION_LIBS=$(top_builddir)/factory/libopp_profiled_factory.la $(top_builddir)/collection/libopp_profiled_collection.la
+OPP_COLLECTION_LIBS=$(top_builddir)/factory/libopp_factory.la $(top_builddir)/collection/libopp_collection.la $(top_builddir)/lookup/libopp_lookup.la
+OPP_DEBUG_COLLECTION_LIBS=$(top_builddir)/factory/libopp_debug_factory.la $(top_builddir)/collection/libopp_debug_collection.la $(top_builddir)/lookup/libopp_debug_lookup.la
+OPP_PROFILED_COLLECTION_LIBS=$(top_builddir)/factory/libopp_profiled_factory.la $(top_builddir)/collection/libopp_profiled_collection.la $(top_builddir)/lookup/libopp_profiled_lookup.la
 
 AROOP_CORE_INCLUDES=-I$(top_builddir)/includes/ -Ifactory/inc
 

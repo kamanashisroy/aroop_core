@@ -5,9 +5,9 @@ TARGET_LAR=libopp_collection.la libopp_debug_collection.la libopp_profiled_colle
 noinst_LTLIBRARIES=$(TARGET_LAR)
 
 OPP_COLLECTION_SOURCE_FILES = \
-src/opp_any_obj.c           src/opp_hash.c          src/opp_list.c             src/opp_salt.c         src/opp_watchdog.c \
-src/opp_hash_table.c    src/opp_queue.c            src/opp_str2.c \
-src/opp_factory_profiler.c  src/opp_indexed_list.c
+src/opp_any_obj.c           src/opp_list.c             src/opp_salt.c         src/opp_watchdog.c \
+src/opp_queue.c            src/opp_str2.c \
+src/opp_factory_profiler.c
 
 AROOP_CORE_INCLUDES=-I$(top_builddir)/includes -Iinc
 

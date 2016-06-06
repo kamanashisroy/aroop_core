@@ -51,6 +51,8 @@ AC_CONFIG_FILES([
 		factory/tests/Makefile
 		collection/Makefile
 		collection/tests/Makefile
+		lookup/Makefile
+		lookup/tests/Makefile
 		aroop/Makefile
 		aroop/tests/Makefile
 		includes/Makefile
