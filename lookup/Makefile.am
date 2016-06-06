@@ -8,6 +8,7 @@ OPP_COLLECTION_SOURCE_FILES = \
 src/opp_hash.c	\
 src/opp_hash_table.c	\
 src/opp_hash_otable.c	\
+src/opp_hash_ctable.c	\
 src/opp_indexed_list.c
 
 AROOP_CORE_INCLUDES=-I$(top_builddir)/includes -Iinc

@@ -32,7 +32,7 @@
 #include "aroop/opp/opp_iterator.h"
 #include "aroop/opp/opp_factory_profiler.h"
 #include "aroop/opp/opp_hash_table.h"
-#include "aroop/opp/opp_hash_otable.h"
+#include "aroop/opp/opp_hash_ctable.h"
 
 C_CAPSULE_START
 
@@ -55,12 +55,12 @@ opp_hash_function_t test_obj_hash_func = {.aroop_closure_data = NULL, .aroop_cb 
 opp_equals_t test_obj_equals_func = {.aroop_closure_data = NULL, .aroop_cb = test_obj_is_equal};
 
 
-START_TEST (test_opp_hash_otable)
+START_TEST (test_opp_hash_ctable)
 {
-	opp_map_pointer_t arr[10];
-	opp_hash_otable_t otable;
-	opp_hash_otable_create(&otable, &arr, 10, test_obj_hash_func, test_obj_equals_func, 0);
-	ck_assert_int_eq(otable.collision, 0);
+	opp_map_chained_pointer_t*arr[10];
+	opp_hash_ctable_t ctable;
+	opp_hash_ctable_create(&ctable, &arr, 10, 10, 0, test_obj_hash_func, test_obj_equals_func);
+	ck_assert_int_eq(ctable.collision, 0);
 	
 	struct opp_factory obuff;
 	int status = opp_factory_create_full(&obuff, 10, sizeof(struct test_obj), 0, OPPF_SWEEP_ON_UNREF, NULL);
@@ -71,30 +71,38 @@ START_TEST (test_opp_hash_otable)
 	content->token = 100;
 	ck_assert(content != NULL);
 
-	opp_hash_otable_set(&otable, content, content);
-	ck_assert_int_eq(otable.collision, 0);
-	struct test_obj*output = opp_hash_otable_get_no_ref(&otable, content);
-	ck_assert_int_eq(otable.collision, 0);
-	output = opp_hash_otable_get(&otable, content);
-	ck_assert_int_eq(otable.collision, 0);
+	opp_hash_ctable_set(&ctable, content, content);
+	ck_assert_int_eq(ctable.collision, 0);
+	ck_assert(arr[1] == NULL);
+	ck_assert(arr[0] != NULL);
+	ck_assert(arr[0]->hashcode == content->token);
+	ck_assert(arr[0]->key == content);
+	ck_assert(arr[0]->ptr == content);
+
+
+	struct test_obj*output = opp_hash_ctable_get_no_ref(&ctable, content);
+	ck_assert(output != NULL);
+	ck_assert_int_eq(ctable.collision, 0);
+	output = opp_hash_ctable_get(&ctable, content);
+	ck_assert_int_eq(ctable.collision, 0);
 
 	ck_assert_int_eq(content, output);
-	ck_assert_int_eq(otable.collision, 0);
+	ck_assert_int_eq(ctable.collision, 0);
 
-	opp_hash_otable_destroy(&otable);
+	opp_hash_ctable_destroy(&ctable);
 	opp_factory_destroy_and_remove_profile(&obuff);
 }
 END_TEST
 
-Suite * opp_hash_otable_suite(void) {
+Suite * opp_hash_ctable_suite(void) {
 	Suite *s;
 	TCase *tc_core;
-	s = suite_create("opp_hash_otable.c");
+	s = suite_create("opp_hash_ctable.c");
 
 	/* Core test case */
 	tc_core = tcase_create("lookup");
 
-	tcase_add_test(tc_core, test_opp_hash_otable);
+	tcase_add_test(tc_core, test_opp_hash_ctable);
 	suite_add_tcase(s, tc_core);
 
 	return s;
@@ -106,7 +114,7 @@ int main() {
 	Suite *s;
 	SRunner *sr;
 
-	s = opp_hash_otable_suite();
+	s = opp_hash_ctable_suite();
 	sr = srunner_create(s);
 
 	//srunner_run_all(sr, CK_NORMAL);

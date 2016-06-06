@@ -30,33 +30,30 @@
 #endif
 
 C_CAPSULE_START
-
-enum {
-	OPP_HASH_OTABLE_FLAG_NOREF = 1,
-};
-
-typedef struct hash_otable_item {
+typedef struct hash_ctable_item {
 	opp_hash_t hashcode;
-	void*ptr;
 	void*key;
-} opp_map_pointer_t;
+	void*ptr;
+	void*next;
+} opp_map_chained_pointer_t;
 
 typedef struct {
+	struct opp_factory fac;
 	const opp_hash_function_t hfunc;
 	const opp_equals_t efunc;
 	const unsigned int max_slots;
-	const opp_property_t property;
-	opp_map_pointer_t (* const slots)[];
+	opp_map_chained_pointer_t* (* const slots)[];
 	unsigned int collision;
-} opp_hash_otable_t;
+} opp_hash_ctable_t;
 
-void*opp_hash_otable_get(opp_hash_otable_t*ht, void*key);
-void*opp_hash_otable_get_no_ref(opp_hash_otable_t*ht, void*key);
-int opp_hash_otable_set(opp_hash_otable_t*ht, void*key, void*obj_data);
-int opp_hash_otable_traverse(opp_hash_otable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash);
-int opp_hash_otable_create(opp_hash_otable_t*ht, opp_map_pointer_t(* const arr)[], unsigned int arr_size, opp_hash_function_t hfunc, opp_equals_t efunc, opp_property_t flags);
-int opp_hash_otable_destroy(opp_hash_otable_t*ht);
-
+void*opp_hash_ctable_get(opp_hash_ctable_t*ht, void*key);
+void*opp_hash_ctable_get_no_ref(opp_hash_ctable_t*ht, void*key);
+int opp_hash_ctable_set(opp_hash_ctable_t*ht, void*key, void*obj_data);
+int opp_hash_ctable_traverse(opp_hash_ctable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash);
+#define opp_hash_ctable_create(x,ar,ars,y,z,a,b) ({opp_hash_ctable_create_and_profile(x,ar,ars,y,z,a,b, __FILE__, __LINE__, AROOP_MODULE_NAME);})
+int opp_hash_ctable_create_and_profile(opp_hash_ctable_t*ht, opp_map_chained_pointer_t*(* const arr)[], unsigned int arr_size, int pool_size, unsigned int flag, opp_hash_function_t hfunc, opp_equals_t efunc
+		, char*source_file, int source_line, char*module_name);
+#define opp_hash_ctable_destroy(x) opp_factory_destroy_and_remove_profile(&(x)->fac)
 C_CAPSULE_END
 
 
