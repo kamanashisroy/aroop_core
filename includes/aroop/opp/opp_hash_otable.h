@@ -53,7 +53,7 @@ typedef struct {
 void*opp_hash_otable_get(opp_hash_otable_t*ht, void*key);
 void*opp_hash_otable_get_no_ref(opp_hash_otable_t*ht, void*key);
 int opp_hash_otable_set(opp_hash_otable_t*ht, void*key, void*obj_data);
-int opp_hash_otable_traverse(opp_hash_otable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash);
+int opp_hash_otable_traverse(opp_hash_otable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data);
 int opp_hash_otable_create(opp_hash_otable_t*ht, opp_map_pointer_t(* const arr)[], unsigned int arr_size, opp_hash_function_t hfunc, opp_equals_t efunc, opp_property_t flags);
 int opp_hash_otable_destroy(opp_hash_otable_t*ht);
 

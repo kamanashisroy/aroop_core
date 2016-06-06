@@ -142,7 +142,7 @@ int opp_hash_ctable_set(opp_hash_ctable_t* const ht, void*const key, void* const
 	return 0;
 }
 
-int opp_hash_ctable_traverse(opp_hash_ctable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data, int flags, int if_not_flags, int matchhash) {
+int opp_hash_ctable_traverse(opp_hash_ctable_t*ht, int (*cb)(void*cb_data, void*key, void*data), void*cb_data) {
 	int index = ht->max_slots;
 	while(index--) {
 		opp_map_chained_pointer_t*x = (*(ht->slots))[index];
