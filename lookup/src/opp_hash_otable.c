@@ -64,7 +64,7 @@ void*opp_hash_otable_get(opp_hash_otable_t*ht, void*key) {
 }
 
 OPP_INLINE static int opp_map_pointer_cleanup(opp_hash_otable_t* const ht, opp_map_pointer_t* const x) {
-	if(!(ht->property & OPP_HASH_OTABLE_FLAG_NOREF)) {
+	if((ht->property & OPP_HASH_OTABLE_FLAG_NOREF) == OPP_HASH_OTABLE_FLAG_NOREF) {
 		x->key = x->ptr = NULL;
 	} else {
 		OPPUNREF(x->key);
@@ -74,7 +74,7 @@ OPP_INLINE static int opp_map_pointer_cleanup(opp_hash_otable_t* const ht, opp_m
 }
 
 OPP_INLINE static int opp_map_pointer_set(opp_hash_otable_t* const ht, opp_map_pointer_t* const x, void*const key, void*const obj_data) {
-	if(!(ht->property & OPP_HASH_OTABLE_FLAG_NOREF)) {
+	if((ht->property & OPP_HASH_OTABLE_FLAG_NOREF) == OPP_HASH_OTABLE_FLAG_NOREF) {
 		x->key = key;
 		x->ptr = obj_data;
 	} else {
