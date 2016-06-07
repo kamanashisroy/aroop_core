@@ -40,7 +40,7 @@ OPP_INLINE static unsigned int opp_hash_otable_get_index(opp_hash_otable_t*ht, v
 	int times = ht->max_slots;
 	while(times--) {
 		const opp_map_pointer_t*x = &(*(ht->slots))[index];
-		if(!x) {
+		if(!x->hashcode) {
 			return -1;
 		} else if(x->key && x->hashcode == hashcode && ht->efunc.aroop_cb(ht->efunc.aroop_closure_data,x->key,key)) {
 			return index;
