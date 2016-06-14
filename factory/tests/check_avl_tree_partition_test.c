@@ -11,6 +11,9 @@
 #include "aroop/opp/opp_factory_profiler.h"
 
 C_CAPSULE_START
+
+#include "../src/opp_factory_part_property.c"
+
 typedef struct avlnode {
 	int key;
 	int height;
@@ -20,96 +23,135 @@ typedef struct avlnode {
 	struct avlnode*parent;
 } avlnode_t;
 
+typedef struct avltree {
+	struct avlnode*root; /* it is the root node */
+} avltree_t;
+
 /**
  * The AVL tree keeps an extra property of the node. It is the heght of the node.
  * 
  * - Height is defined as the longest path to the leaf. So the height of a leaf is 0.
  * - Height of an internal node is max(height of children)
  */
-static void avlnode_fixHeight(avlnode_t*node) {
+static inline void avlnode_fixHeight(avlnode_t*node) {
+	ck_assert(node);
 	node->height = 0;
 	if(node->right && (node->right->height > (node->height-1))) {
 		node->height = node->right->height+1;
+		ck_assert(node->right->parent == node);
 	}
 	if(node->left && (node->left->height > (node->height-1))) {
 		node->height = node->left->height+1;
+		ck_assert(node->left->parent == node);
 	}
 	//cout << " height of " << key << " is " << height << endl;
 	if(node->parent)
 		avlnode_fixHeight(node->parent);
 }
 
-static avlnode_t*avlnode_rotateRight(avlnode_t*node) {
-	assert(node->left != NULL);
-	//cout << " rotating right " << key << endl;
-	avlnode_t*head = node->left;
-	head->parent = node->parent;
-	if(node->parent) {
-		if(node->parent->right == node) {
-			//OPPUNREF(node->parent->right);
-			node->parent->right = head;
-		} else {
-			//OPPUNREF(node->parent->left);
-			node->parent->left = head;
-		}
-	}
-
-	// transplant left
-	//OPPUNREF(node->left);
-	node->left = head->right;
-	if(node->left)
-		node->left->parent = node;
-
-	// transplant right
-	head->right = node;
-	node->parent = head;
-
-	// fix height property
-	avlnode_fixHeight(node);
-	return head;
+static inline void avlnode_set_parent(avlnode_t* const node, avlnode_t* const parent) {
+	/* Avoid incrementing the reference count of the parent(weak). Otherwise there will be circular reference. */
+	node->parent = parent;
 }
 
-static avlnode_t*avlnode_rotateLeft(avlnode_t*node) {
-	assert(node->right != NULL);
-	//cout << " rotating left " << key << endl;
-	avlnode_t*head = node->right;
-	head->parent = node->parent;
 
-	if(node->parent) {
-		//cout << " adding link to parent " << parent->key << endl;
-		if(node->parent->right == node)
-			node->parent->right = head;
-		else
-			node->parent->left = head;
-	}
-
-	// transplant right
-	node->right = head->left;
+static inline void avlnode_set_right(avlnode_t* const node, avlnode_t* const right) {
+	ck_assert(node);
 	if(node->right)
-		node->right->parent = node;
+		OPPUNREF(node->right);
+	if(right) {
+		node->right = OPPREF(right);
+		avlnode_set_parent(node->right, node);
+		struct opp_object*obj = data_to_opp_object(right);
+		ck_assert(obj->refcount < 10);
+	}
+}
 
-	// transplant head->left
-	head->left = node;
-	node->parent = head;
+static inline void avlnode_set_left(avlnode_t* const node, avlnode_t* const left) {
+	ck_assert(node);
+	if(node->left)
+		OPPUNREF(node->left);
+	if(left) {
+		node->left = OPPREF(left);
+		avlnode_set_parent(node->left, node);
+	}
+}
+
+static inline avlnode_t*avlnode_rotateRight(avlnode_t*const node) {
+	ck_assert(node->left != NULL);
+	//cout << " rotating right " << key << endl;
+	avlnode_t* const head = OPPREF(node->left);
+	ck_assert(head->parent == node);
+	avlnode_set_parent(head, node->parent);
+
+	// rotate
+	avlnode_set_left(node, head->right);
+	avlnode_set_right(head, node);
+
+	/* fix parent */
+	if(head->parent) {
+		/* if node is not root */
+		if(head->parent->right == node)
+			avlnode_set_right(head->parent, head);
+		else
+			avlnode_set_left(head->parent, head);
+		OPPUNREF(head);
+	} else {
+		avlnode_fixHeight(node);
+		OPPUNREF(node);
+	}
 
 	// fix height property
-	avlnode_fixHeight(node);
-
+	if(node)
+		avlnode_fixHeight(node);
 	return head;
 }
 
-static avlnode_t*avlnode_fixAVLProperty(avlnode_t*node) {
-	int rheight = (node->right?node->right->height:-1);
-	int lheight = (node->left?node->left->height:-1);
+static inline avlnode_t*avlnode_rotateLeft(avlnode_t* const node) {
+	ck_assert(node->right != NULL);
+	//cout << " rotating left " << key << endl;
+	avlnode_t* const head = OPPREF(node->right);
+	ck_assert(head);
+	ck_assert(head->parent == node);
+	//head->parent = node->parent;
+	avlnode_set_parent(head, node->parent);
+
+	avlnode_set_right(node, head->left);
+	avlnode_set_left(head, node);
+
+	/* fix parent */
+	if(head->parent) {
+		/* if node is not root */
+		//cout << " adding link to parent " << parent->key << endl;
+		if(head->parent->right == node)
+			avlnode_set_right(head->parent, head);
+		else
+			avlnode_set_left(head->parent, head);
+		OPPUNREF(head);
+	} else {
+		avlnode_fixHeight(node);
+		OPPUNREF(node);
+	}
+
+	// fix height property
+	if(node)
+		avlnode_fixHeight(node);
+	return head;
+}
+
+static inline void avlnode_fixAVLProperty(avltree_t*tree, avlnode_t*node) {
+	const int rheight = (node->right?node->right->height:-1);
+	const int lheight = (node->left?node->left->height:-1);
 	int diff = lheight - rheight;
 	avlnode_t*head = node;
 
 	//cout << " checking avl property for " << key << " the diff is " << diff << endl;
 	/* check AVL condition */
 	if(diff == 1 || diff == -1 || diff == 0)
-		return head; // no worry
+		return; // no worry
 
 	if(diff > 0) { /* if left tree is too deep */
+		ck_assert(node->left != NULL);
 		if(!node->left->left && node->left->right) { // if the left child has no more left child and if there is right child
 			avlnode_rotateLeft(node->left); // so the left child has only left child (no right child), kind of straight line
 		}
@@ -120,36 +162,50 @@ static avlnode_t*avlnode_fixAVLProperty(avlnode_t*node) {
 		}
 		head = avlnode_rotateLeft(node); // now rotate left to lower the right height
 	}
-	return head;
+
+	if(head && head->parent == NULL) { /* if it is the root */
+		tree->root = head;
+	}
 }
 
-avlnode_t*avlnode_insert(avlnode_t*node, avlnode_t*target) {
+void avlnode_insert(avltree_t* const tree, avlnode_t*node, avlnode_t* const target) {
+	if(node == NULL) {
+		node = tree->root;
+		if(node == NULL) {
+			tree->root = target;
+			return;
+		}
+	}
+	/* do simple binary tree insertion */
 	if(target->key < node->key) {
+		/* the smaller goes left */
 		if(node->left)
-			avlnode_insert(node->left, target);
+			avlnode_insert(tree, node->left, target);
 		else {
 			//node->left = new AVLNode(aKey);
 			node->left = target;
-			node->left->parent = node;
+			avlnode_set_parent(target, node);
 			avlnode_fixHeight(node);
 		}
 	} else if(node->key == target->key) {
+		/* equal falls into equal */
 		if(node->equals)
-			return avlnode_insert(node->equals, target);
+			avlnode_insert(tree, node->equals, target);
 		else
 			node->equals = target;
-		return node;
+		return; /* no fixing required */
 	} else {
+		/* bigger goes right */
 		if(node->right)
-			avlnode_insert(node->right, target);
+			avlnode_insert(tree, node->right, target);
 		else {
 			node->right = target;
-			node->right->parent = node;
+			avlnode_set_parent(target, node);
 			avlnode_fixHeight(node);
 		}
 	}
 	//cout << "inserted " << aKey << endl;
-	return avlnode_fixAVLProperty(node);
+	avlnode_fixAVLProperty(tree, node);
 }
 
 avlnode_t*avlnode_search(avlnode_t*node, int given) {
@@ -212,39 +268,42 @@ static int in_order_dump_cb(int key) {
 }
 
 static int test_search(const int n, const int x) {
-	avlnode_t*root = NULL;
+	avltree_t tree = {.root = NULL};
 	int i = n;
 	srand(x);
 	while(i--) {
-		int r = rand();
+		const int r = rand();
 		avlnode_t*node = OPP_ALLOC2(&node_factory, &r);
-		if(!root)
-			root = node;
-		else {
-			avlnode_t*new_root = avlnode_insert(root, node);
-			if(new_root)
-				root = new_root;
-		}
+		ck_assert(node);
+		ck_assert_int_eq(node->key, r);
+		ck_assert_int_eq(node->height, 0);
+		ck_assert(node->right == NULL);
+		ck_assert(node->left == NULL);
+		ck_assert(node->parent == NULL);
+		ck_assert(node->equals == NULL);
+		avlnode_insert(&tree, NULL, node);
+		ck_assert(tree.root);
+		ck_assert(tree.root->parent == NULL);
 	}
 	if(n < 20) {
-		avlnode_dump(root);
+		avlnode_dump(tree.root);
 		printf("\n");
-		avlnode_in_order(root, in_order_dump_cb);
+		avlnode_in_order(tree.root, in_order_dump_cb);
 		printf("\n");
 	}
-	if(avlnode_search(root, x) != NULL) {
+	if(avlnode_search(tree.root, x) != NULL) {
 		printf("found %d \n", x);
 	} else {
 		printf("not found %d \n", x);
 	}
-	OPPUNREF(root);
+	OPPUNREF(tree.root);
 	ck_assert(OPP_FACTORY_USE_COUNT(&node_factory) == 0);
 	return 0;
 }
 
 START_TEST (binary_tree_test)
 {
-	OPP_FACTORY_CREATE(&node_factory, 128, sizeof(struct avlnode), OPP_CB_FUNC(avlnode));
+	OPP_FACTORY_CREATE(&node_factory, 1024, sizeof(struct avlnode), OPP_CB_FUNC(avlnode));
 	test_search(15, 3);
 	//test_search(1000, 3343);
 	return 0;

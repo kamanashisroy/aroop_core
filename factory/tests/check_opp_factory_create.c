@@ -89,7 +89,7 @@ START_TEST (test_opp_factory_create)
 	struct opp_factory obuff;
 	unsigned int i = 0;
 	for(i = 0; i < 1000; i++) {
-		test_opp_factory_buffer(&obuff, rand()%64, rand()%256, 1, OPPF_SWEEP_ON_UNREF);
+		test_opp_factory_buffer(&obuff, rand()%64+1, rand()%256, 1, OPPF_SWEEP_ON_UNREF);
 	}
 }
 END_TEST
