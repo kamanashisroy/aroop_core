@@ -1,2 +1,4 @@
+before_install:
+	apt-get install check
 language: c
 compiler: gcc
