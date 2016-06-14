@@ -1,3 +1,5 @@
+![status](https://travis-ci.org/kamanashisroy/aroop_core.svg?branch=master)
+
 aroop core
 ===========
 
