@@ -1,6 +1,12 @@
 before_install:
 	- sudo apt-get -qq update
 	- sudo apt-get install -y libxml2-dev
+	- ./autogen.sh
 language: c
 compiler:
 	- gcc
+script:
+	- ./configure && make && make check
+branches:
+  only:
+	- master
