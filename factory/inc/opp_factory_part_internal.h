@@ -271,9 +271,6 @@ struct opp_object {
 	(x)->slots = 0; \
 }while(0);
 
-#if 0
-#define SYNC_OBJ_CTZ(x) 
-#else
 #if defined(__EPOC32__) || defined(RASPBERRY_PI_BARE_METAL) // todo add symbian version
 #define SYNC_OBJ_POPCOUNT(a) ({ \
     unsigned int opp_internal_pop_count = (unsigned int)a; \
@@ -289,10 +286,21 @@ struct opp_object {
     (opp_internal_pop_count + (opp_internal_pop_count >> 8)) & 0x0000003F;  /* (6 significant bits) */ \
 })
 #else
+
+
+#ifdef SYNC_BIT64
+#define SYNC_OBJ_POPCOUNT(x) __builtin_popcountl(x)
+#else
 #define SYNC_OBJ_POPCOUNT(x) __builtin_popcount(x)
-#endif
+#endif // SYNC_BIT64
+
+#endif //  defined(__EPOC32__) || defined(RASPBERRY_PI_BARE_METAL) // todo add symbian version
+
+#ifdef SYNC_BIT64
+#define SYNC_OBJ_CTZ(x) __builtin_ctzl(x)
+#else
 #define SYNC_OBJ_CTZ(x) __builtin_ctz(x)
-#endif
+#endif // SYNC_BIT64
 
 #define data_to_opp_object(x) ({(struct opp_object*)pointer_arith_sub_byte(x,sizeof(struct opp_object));})
 

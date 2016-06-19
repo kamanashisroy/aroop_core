@@ -127,60 +127,82 @@ OPP_INLINE static void opp_alloc4_init_object_bit_index(struct opp_object*obj, c
 	obj->slots = slot_count;
 }
 
+
+OPP_INLINE int get_set_n_position_old(BITSTRING_TYPE x, const uint8_t n) {
+#ifdef OPP_DEBUG
+	int loop_breaker = 0;
+#endif
+	while(x) {
+#ifdef OPP_DEBUG
+		loop_breaker++;
+		SYNC_ASSERT(loop_breaker < BIT_PER_STRING);
+#endif
+		/**
+		 * check if there is enough slots available,
+		 * the number of 1(empty) in the string should be bigger than or equal to slot count
+		 */
+		if(n > 1 && SYNC_OBJ_POPCOUNT(x) < n) {
+			return -1;
+		}
+		/**
+		 * number of trailing 0(not empty) bits in bsv
+		 * if bsv = 0b11000, then bit_index = 3
+		 */
+		SYNC_UWORD8_T bit_idx = SYNC_OBJ_CTZ(x);
+		if(n > 1 && (bit_idx + n) > BIT_PER_STRING) {
+			// we cannot do it
+			return -1;
+		}
+		
+		/**
+		 * if we need 2 slots, and we want to position it in 3 then,
+		 * mask = 0b11000
+		 */
+		BITSTRING_TYPE mask = ((1 << n)-1)<<bit_idx;
+		if((mask & x) != mask) { /* check if the slots are available */
+			x &= ~mask;
+			continue;
+		}
+		return bit_idx;
+	}
+	return -1;
+}
+
+OPP_INLINE int get_set_n_position(BITSTRING_TYPE x, const uint8_t n) {
+	if(!n || n > BIT_PER_STRING) return -1;
+	int i = n-1;
+	while(x && i--) {
+		x = x & (x << 1);
+	};
+	if(!x) return -1;
+	x = x - (x & (x-1));
+	if(!x) return -1;
+	int pos = SYNC_OBJ_CTZ(x);
+	assert(pos >= (n-1));
+	return pos - (n-1);
+}
+
+
 OPP_INLINE static SYNC_UWORD8_T*opp_alloc4_find_space(const struct opp_pool*pool, const SYNC_UWORD16_T pool_size, const SYNC_UWORD8_T slot_count, const SYNC_UWORD16_T obj_size, SYNC_UWORD16_T*obj_seq) {
 	unsigned long k = 0;
 	BITSTRING_TYPE*bitstring = pool->bitstring;
 	for(;BITSTRING_IDX_TO_BITS(k) < pool_size;k++,bitstring+=BITFIELD_SIZE) {
 		// find first 0
-		BITSTRING_TYPE bsv = (~(*bitstring | *(bitstring+BITFIELD_PAIRED)));
-		if(!bsv) continue;
-#ifdef OPP_DEBUG
-		int loop_breaker = 0;
-#endif
-		while(bsv) {
-#ifdef OPP_DEBUG
-			loop_breaker++;
-			SYNC_ASSERT(loop_breaker < BIT_PER_STRING);
-#endif
-			/**
-			 * check if there is enough slots available,
-			 * the number of 1(empty) in the string should be bigger than or equal to slot count
-			 */
-			if(slot_count > 1 && SYNC_OBJ_POPCOUNT(bsv) < slot_count) {
-				break;
-			}
-			/**
-			 * number of trailing 0(not empty) bits in bsv
-			 * if bsv = 0b11000, then bit_index = 3
-			 */
-			SYNC_UWORD8_T bit_idx = SYNC_OBJ_CTZ(bsv);
-			if(slot_count > 1 && (bit_idx + slot_count) > BIT_PER_STRING) {
-				// we cannot do it
-				break;
-			}
-			
-			/**
-			 * if we need 2 slots, and we want to position it in 3 then,
-			 * mask = 0b11000
-			 */
-			BITSTRING_TYPE mask = ((1 << slot_count)-1)<<bit_idx;
-			if((mask & bsv) != mask) { /* check if the slots are available */
-				bsv &= ~mask;
-				continue;
-			}
-			/**
-			 * We have found some space
-			 */
-			const SYNC_UWORD16_T obj_idx = *obj_seq = BITSTRING_IDX_TO_BITS(k) + bit_idx;
-			if(obj_idx >= pool_size) { /* we are overflowing the buffer */
-				bsv &= ~mask;
-				continue;
-			}
-			SYNC_ASSERT(obj_idx < pool_size);
-			SYNC_UWORD8_T*ret = (pool->head + obj_idx*obj_size);
-			opp_alloc4_init_object_bit_index((struct opp_object*)ret, bit_idx, bitstring, slot_count);
-			return ret;
+		BITSTRING_TYPE bsv = ~(*bitstring | *(bitstring+BITFIELD_PAIRED));
+		const int pos = get_set_n_position(bsv, slot_count);
+		assert(pos == get_set_n_position_old(bsv, slot_count));
+		if(pos == -1)
+			continue;
+		const SYNC_UWORD8_T bit_idx = pos;
+		assert((bsv & (((1 << slot_count)-1) << bit_idx)) == (((1 << slot_count)-1) << bit_idx));
+		const SYNC_UWORD16_T obj_idx = *obj_seq = BITSTRING_IDX_TO_BITS(k) + bit_idx;
+		if(obj_idx >= pool_size) { /* we are overflowing the buffer */
+			continue;
 		}
+		SYNC_ASSERT(obj_idx < pool_size);
+		SYNC_UWORD8_T*ret = (pool->head + obj_idx*obj_size);
+		opp_alloc4_init_object_bit_index((struct opp_object*)ret, bit_idx, bitstring, slot_count);
+		return ret;
 	}
 	return NULL;
 }
