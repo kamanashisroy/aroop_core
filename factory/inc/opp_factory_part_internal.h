@@ -297,7 +297,7 @@ struct opp_object {
 #endif //  defined(__EPOC32__) || defined(RASPBERRY_PI_BARE_METAL) // todo add symbian version
 
 #ifdef SYNC_BIT64
-#define SYNC_OBJ_CTZ(x) __builtin_ctzl(x)
+#define SYNC_OBJ_CTZ(x) __builtin_ctzll(x)
 #else
 #define SYNC_OBJ_CTZ(x) __builtin_ctz(x)
 #endif // SYNC_BIT64
